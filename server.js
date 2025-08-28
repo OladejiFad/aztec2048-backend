@@ -1,0 +1,160 @@
+require('dotenv').config();
+const express = require('express');
+const session = require('express-session');
+const passport = require('./config'); // your passport config
+const authRoutes = require('./routes/auth'); // auth routes (with weekly/anti-cheat)
+const cors = require('cors');
+const User = require('./models/User');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// --- Enable CORS for frontend ---
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
+
+// --- Body parser ---
+app.use(express.json());
+
+// --- Session setup ---
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'secret',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false } // false for localhost HTTP
+}));
+
+// --- Initialize passport ---
+app.use(passport.initialize());
+app.use(passport.session());
+
+// --- Routes ---
+app.get('/', (req, res) => {
+  res.send('Welcome! <a href="/auth/twitter">Login with Twitter</a>');
+});
+
+// Use the auth router for all /auth routes
+app.use('/auth', authRoutes);
+
+// --- Protected dashboard page ---
+app.get('/dashboard', (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect('/');
+  const user = req.user;
+  res.send(`
+    <h1>Welcome, ${user.displayName || user.username}!</h1>
+    <p>Username: ${user.username}</p>
+    <p>Twitter ID: ${user.twitterId}</p>
+    ${user.photo ? `<img src="${user.photo}" width="100"/>` : ''}
+    <br/><br/>
+    <a href="/auth/logout">Logout</a>
+  `);
+});
+
+// --- API: Get current user ---
+app.get('/api/me', (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
+  const { _id, twitterId, username, displayName, photo, totalScore, weeklyScores } = req.user;
+
+  // calculate games left (default 7)
+  let gamesLeft = 7;
+  if (weeklyScores && Array.isArray(weeklyScores)) {
+    const now = new Date();
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(now.getDate() - now.getDay());
+    const thisWeek = weeklyScores.filter(s => new Date(s.date) >= weekStart);
+    gamesLeft = Math.max(0, 7 - thisWeek.length);
+  }
+
+  res.json({ _id, twitterId, username, displayName, photo, totalScore, weeklyScores, gamesLeft });
+});
+
+// --- API: Update score ---
+app.post('/api/update-score/:userId', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
+  const { userId } = req.params;
+  const { score } = req.body;
+
+  if (typeof score !== 'number' || score <= 0 || score > 30000) {
+    return res.status(400).json({ error: 'Invalid score. Max 30,000 per game.' });
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const now = new Date();
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(now.getDate() - now.getDay()); // Sunday as week start
+
+    if (!user.weeklyScores) user.weeklyScores = [];
+
+    // Keep only scores from this week
+    user.weeklyScores = user.weeklyScores.filter(s => new Date(s.date) >= weekStart);
+
+    // 🚨 Enforce max 7 games/week
+    if (user.weeklyScores.length >= 7) {
+      return res.status(400).json({ error: 'Weekly game limit reached (7 games).', gamesLeft: 0 });
+    }
+
+    // 🚨 Optional: keep weekly cap logic if you still want it
+    const weeklyTotal = user.weeklyScores.reduce((sum, s) => sum + s.score, 0);
+    if (weeklyTotal + score > 210000) {
+      return res.status(400).json({ error: 'Weekly max points exceeded (210,000).', gamesLeft: 7 - user.weeklyScores.length });
+    }
+
+    // Save score
+    user.totalScore = (user.totalScore || 0) + score;
+    user.weeklyScores.push({ score, date: new Date() });
+    await user.save();
+
+    // Respond with gamesLeft
+    const gamesLeft = 7 - user.weeklyScores.length;
+    res.json({ success: true, totalScore: user.totalScore, gamesLeft, weeklyScores: user.weeklyScores });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- API: Leaderboard ---
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const all = req.query.all === 'true';
+    const query = User.find().sort({ totalScore: -1 }).select('username displayName photo totalScore weeklyScores');
+    if (!all) query.limit(20);
+    const users = await query.exec();
+
+    // compute gamesLeft for each leaderboard entry
+    const now = new Date();
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(now.getDate() - now.getDay());
+
+    const result = users.map(u => {
+      let gamesLeft = 7;
+      if (u.weeklyScores && Array.isArray(u.weeklyScores)) {
+        const thisWeek = u.weeklyScores.filter(s => new Date(s.date) >= weekStart);
+        gamesLeft = Math.max(0, 7 - thisWeek.length);
+      }
+      return {
+        _id: u._id,
+        displayName: u.displayName || u.username, // <-- use real name here
+        photo: u.photo,
+        totalScore: u.totalScore,
+        gamesLeft
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- Start server ---
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
