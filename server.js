@@ -4,10 +4,22 @@ const session = require('express-session');
 const passport = require('./config'); // your passport config
 const authRoutes = require('./routes/auth'); // auth routes (with weekly/anti-cheat)
 const cors = require('cors');
+const mongoose = require('mongoose');
 const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// --- MongoDB connection ---
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1); // crash if DB connection fails
+  });
 
 // --- Enable CORS for frontend ---
 app.use(cors({
@@ -23,7 +35,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false } // false for localhost HTTP
+  cookie: { secure: false } // set true if using HTTPS in production
 }));
 
 // --- Initialize passport ---
@@ -35,10 +47,10 @@ app.get('/', (req, res) => {
   res.send('Welcome! <a href="/auth/twitter">Login with Twitter</a>');
 });
 
-// Use the auth router for all /auth routes
+// Auth routes
 app.use('/auth', authRoutes);
 
-// --- Protected dashboard page ---
+// Protected dashboard page
 app.get('/dashboard', (req, res) => {
   if (!req.isAuthenticated()) return res.redirect('/');
   const user = req.user;
@@ -52,7 +64,7 @@ app.get('/dashboard', (req, res) => {
   `);
 });
 
-// --- API: Get current user ---
+// API: Get current user
 app.get('/api/me', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
   const { _id, twitterId, username, displayName, photo, totalScore, weeklyScores } = req.user;
@@ -71,7 +83,7 @@ app.get('/api/me', (req, res) => {
   res.json({ _id, twitterId, username, displayName, photo, totalScore, weeklyScores, gamesLeft });
 });
 
-// --- API: Update score ---
+// API: Update score
 app.post('/api/update-score/:userId', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
   const { userId } = req.params;
@@ -88,19 +100,19 @@ app.post('/api/update-score/:userId', async (req, res) => {
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay()); // Sunday as week start
+    weekStart.setDate(now.getDate() - now.getDay());
 
     if (!user.weeklyScores) user.weeklyScores = [];
 
     // Keep only scores from this week
     user.weeklyScores = user.weeklyScores.filter(s => new Date(s.date) >= weekStart);
 
-    // 🚨 Enforce max 7 games/week
+    // Enforce max 7 games/week
     if (user.weeklyScores.length >= 7) {
       return res.status(400).json({ error: 'Weekly game limit reached (7 games).', gamesLeft: 0 });
     }
 
-    // 🚨 Optional: keep weekly cap logic if you still want it
+    // Optional weekly cap logic
     const weeklyTotal = user.weeklyScores.reduce((sum, s) => sum + s.score, 0);
     if (weeklyTotal + score > 210000) {
       return res.status(400).json({ error: 'Weekly max points exceeded (210,000).', gamesLeft: 7 - user.weeklyScores.length });
@@ -111,16 +123,15 @@ app.post('/api/update-score/:userId', async (req, res) => {
     user.weeklyScores.push({ score, date: new Date() });
     await user.save();
 
-    // Respond with gamesLeft
     const gamesLeft = 7 - user.weeklyScores.length;
     res.json({ success: true, totalScore: user.totalScore, gamesLeft, weeklyScores: user.weeklyScores });
   } catch (err) {
-    console.error(err);
+    console.error('Error in /api/update-score:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// --- API: Leaderboard ---
+// API: Leaderboard
 app.get('/api/leaderboard', async (req, res) => {
   try {
     const all = req.query.all === 'true';
@@ -128,7 +139,6 @@ app.get('/api/leaderboard', async (req, res) => {
     if (!all) query.limit(20);
     const users = await query.exec();
 
-    // compute gamesLeft for each leaderboard entry
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
@@ -142,7 +152,7 @@ app.get('/api/leaderboard', async (req, res) => {
       }
       return {
         _id: u._id,
-        displayName: u.displayName || u.username, // <-- use real name here
+        displayName: u.displayName || u.username,
         photo: u.photo,
         totalScore: u.totalScore,
         gamesLeft
@@ -151,10 +161,16 @@ app.get('/api/leaderboard', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error('Error in /api/leaderboard:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
+// --- Catch-all error handler ---
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
 // --- Start server ---
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
