@@ -16,13 +16,19 @@ router.get('/twitter', passport.authenticate('twitter'));
 router.get(
   '/twitter/callback',
   passport.authenticate('twitter', { failureRedirect: '/' }),
-  (req, res) => res.redirect(`${process.env.FRONTEND_URL}/dashboard`)
+  (req, res) => {
+    // Redirect to frontend dashboard after successful login
+    res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+  }
 );
 
 // --- Logout ---
-router.get('/logout', (req, res) =>
-  req.logout(() => res.redirect(process.env.FRONTEND_URL))
-);
+router.get('/logout', (req, res, next) => {
+  req.logout(err => {
+    if (err) return next(err);
+    res.redirect(process.env.FRONTEND_URL);
+  });
+});
 
 // --- API: Get current user ---
 router.get('/api/me', ensureAuthenticated, async (req, res) => {
@@ -35,10 +41,10 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay()); // start of week
+    weekStart.setDate(now.getDate() - now.getDay());
 
     const weeklyScores = (user.weeklyScores || []).filter(
-      (s) => new Date(s.date) >= weekStart
+      s => new Date(s.date) >= weekStart
     );
 
     res.json({
@@ -47,10 +53,10 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
       photo: user.photo,
       totalScore: user.totalScore || 0,
       gamesThisWeek: weeklyScores.length,
-      gamesLeft: Math.max(0, 7 - weeklyScores.length),
+      gamesLeft: Math.max(0, 7 - weeklyScores.length)
     });
   } catch (err) {
-    console.error(err);
+    console.error('Error in /api/me:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -60,7 +66,6 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
   const { userId } = req.params;
   const { score } = req.body;
 
-  // 🚨 Validate score input
   if (typeof score !== 'number' || score <= 0 || score > 30000) {
     return res.status(400).json({ error: 'Invalid score. Max 30,000 per game.' });
   }
@@ -72,22 +77,21 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay()); // Sunday = start of week
+    weekStart.setDate(now.getDate() - now.getDay());
 
-    // Make sure weeklyScores exists
     if (!user.weeklyScores) user.weeklyScores = [];
 
     // Keep only scores from this week
     user.weeklyScores = user.weeklyScores.filter(
-      (s) => new Date(s.date) >= weekStart
+      s => new Date(s.date) >= weekStart
     );
 
-    // 🚨 Enforce 7 games max per week
+    // Enforce 7 games max per week
     if (user.weeklyScores.length >= 7) {
       return res.status(400).json({ error: 'Weekly play limit reached (7 games max).' });
     }
 
-    // ✅ Save score (lifetime + weekly log)
+    // Save score
     user.totalScore = (user.totalScore || 0) + score;
     user.weeklyScores.push({ score, date: now });
 
@@ -100,21 +104,21 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
       success: true,
       totalScore: user.totalScore,
       gamesThisWeek,
-      gamesLeft,
+      gamesLeft
     });
   } catch (err) {
-    console.error(err);
+    console.error('Error in /api/update-score:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// --- API: Leaderboard (lifetime scores + weekly games used/left) ---
+// --- API: Leaderboard ---
 router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
   try {
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay()); // start of week (Sunday)
+    weekStart.setDate(now.getDate() - now.getDay());
 
     const users = await User.find().sort({ totalScore: -1 }).limit(50);
 
@@ -127,20 +131,18 @@ router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
       const gamesLeft = Math.max(0, 7 - gamesThisWeek);
       return {
         _id: user._id,
-        username: user.username, // keep optional
-        displayName: user.displayName || user.username, // use displayName with fallback
+        username: user.username,
+        displayName: user.displayName || user.username,
         photo: user.photo,
         totalScore: user.totalScore || 0,
         gamesThisWeek,
-        gamesLeft,
+        gamesLeft
       };
-
     });
-
 
     res.json({ leaderboard });
   } catch (err) {
-    console.error(err);
+    console.error('Error in /api/leaderboard:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

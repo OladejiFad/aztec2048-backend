@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const passport = require('./config'); // your passport config
-const authRoutes = require('./routes/auth'); // auth routes (with weekly/anti-cheat)
+const authRoutes = require('./routes/auth'); // auth routes (with Twitter login)
 const cors = require('cors');
 const mongoose = require('mongoose');
 const User = require('./models/User');
@@ -11,10 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- MongoDB connection ---
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => {
     console.error('❌ MongoDB connection error:', err.message);
@@ -35,7 +32,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false } // set true if using HTTPS in production
+  cookie: { secure: false } // set true if using HTTPS
 }));
 
 // --- Initialize passport ---
@@ -46,11 +43,9 @@ app.use(passport.session());
 app.get('/', (req, res) => {
   res.send('Welcome! <a href="/auth/twitter">Login with Twitter</a>');
 });
-
-// Auth routes
 app.use('/auth', authRoutes);
 
-// Protected dashboard page
+// --- Protected dashboard page ---
 app.get('/dashboard', (req, res) => {
   if (!req.isAuthenticated()) return res.redirect('/');
   const user = req.user;
@@ -64,12 +59,11 @@ app.get('/dashboard', (req, res) => {
   `);
 });
 
-// API: Get current user
+// --- API: Get current user ---
 app.get('/api/me', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
   const { _id, twitterId, username, displayName, photo, totalScore, weeklyScores } = req.user;
 
-  // calculate games left (default 7)
   let gamesLeft = 7;
   if (weeklyScores && Array.isArray(weeklyScores)) {
     const now = new Date();
@@ -83,7 +77,7 @@ app.get('/api/me', (req, res) => {
   res.json({ _id, twitterId, username, displayName, photo, totalScore, weeklyScores, gamesLeft });
 });
 
-// API: Update score
+// --- API: Update score ---
 app.post('/api/update-score/:userId', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
   const { userId } = req.params;
@@ -103,35 +97,34 @@ app.post('/api/update-score/:userId', async (req, res) => {
     weekStart.setDate(now.getDate() - now.getDay());
 
     if (!user.weeklyScores) user.weeklyScores = [];
-
-    // Keep only scores from this week
     user.weeklyScores = user.weeklyScores.filter(s => new Date(s.date) >= weekStart);
 
-    // Enforce max 7 games/week
     if (user.weeklyScores.length >= 7) {
       return res.status(400).json({ error: 'Weekly game limit reached (7 games).', gamesLeft: 0 });
     }
 
-    // Optional weekly cap logic
     const weeklyTotal = user.weeklyScores.reduce((sum, s) => sum + s.score, 0);
     if (weeklyTotal + score > 210000) {
       return res.status(400).json({ error: 'Weekly max points exceeded (210,000).', gamesLeft: 7 - user.weeklyScores.length });
     }
 
-    // Save score
     user.totalScore = (user.totalScore || 0) + score;
-    user.weeklyScores.push({ score, date: new Date() });
+    user.weeklyScores.push({ score, date: now });
     await user.save();
 
-    const gamesLeft = 7 - user.weeklyScores.length;
-    res.json({ success: true, totalScore: user.totalScore, gamesLeft, weeklyScores: user.weeklyScores });
+    res.json({
+      success: true,
+      totalScore: user.totalScore,
+      gamesLeft: 7 - user.weeklyScores.length,
+      weeklyScores: user.weeklyScores
+    });
   } catch (err) {
     console.error('Error in /api/update-score:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// API: Leaderboard
+// --- API: Leaderboard ---
 app.get('/api/leaderboard', async (req, res) => {
   try {
     const all = req.query.all === 'true';
