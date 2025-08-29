@@ -17,8 +17,13 @@ router.get(
   '/twitter/callback',
   passport.authenticate('twitter', { failureRedirect: '/' }),
   (req, res) => {
-    // Redirect to frontend dashboard after successful login
-    res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
+    // Force redirect to frontend dashboard after successful login
+    const redirectUrl = process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/dashboard`
+      : 'http://localhost:3000/dashboard';
+
+    // Use cookie-based session persistence (already in your session setup)
+    res.redirect(redirectUrl);
   }
 );
 
@@ -26,7 +31,7 @@ router.get(
 router.get('/logout', (req, res, next) => {
   req.logout(err => {
     if (err) return next(err);
-    res.redirect(process.env.FRONTEND_URL);
+    res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
   });
 });
 
@@ -61,7 +66,7 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// --- API: Update score with 7-play weekly limit and 30k cap ---
+// --- API: Update score ---
 router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) => {
   const { userId } = req.params;
   const { score } = req.body;
@@ -80,18 +85,12 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
     weekStart.setDate(now.getDate() - now.getDay());
 
     if (!user.weeklyScores) user.weeklyScores = [];
+    user.weeklyScores = user.weeklyScores.filter(s => new Date(s.date) >= weekStart);
 
-    // Keep only scores from this week
-    user.weeklyScores = user.weeklyScores.filter(
-      s => new Date(s.date) >= weekStart
-    );
-
-    // Enforce 7 games max per week
     if (user.weeklyScores.length >= 7) {
       return res.status(400).json({ error: 'Weekly play limit reached (7 games max).' });
     }
 
-    // Save score
     user.totalScore = (user.totalScore || 0) + score;
     user.weeklyScores.push({ score, date: now });
 
