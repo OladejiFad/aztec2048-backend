@@ -61,12 +61,13 @@ app.use(session({
     collectionName: 'sessions',
   }),
   cookie: {
-    secure: process.env.NODE_ENV === "production", // true in prod (HTTPS), false locally
-    httpOnly: true,        // prevent JS access
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // cross-site cookies in prod
-    maxAge: 1000 * 60 * 60 * 24 // 1 day
+    secure: true,       // must be HTTPS
+    httpOnly: true,     // prevents JS access
+    sameSite: 'none',   // allows cross-site
+    maxAge: 1000 * 60 * 60 * 24
   }
 }));
+
 
 /* --- Passport init --- */
 app.use(passport.initialize());
