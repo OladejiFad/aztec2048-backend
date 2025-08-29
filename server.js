@@ -5,12 +5,13 @@ const passport = require('./config'); // Twitter passport config
 const authRoutes = require('./routes/auth'); // auth routes
 const cors = require('cors');
 const mongoose = require('mongoose');
+const MongoStore = require('connect-mongo');
 const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- Global unhandled rejection/exception logging ---
+/* --- Global unhandled rejection/exception logging --- */
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[UNHANDLED REJECTION]', reason);
 });
@@ -18,12 +19,12 @@ process.on('uncaughtException', (err) => {
   console.error('[UNCAUGHT EXCEPTION]', err);
 });
 
-// --- Debug environment variables ---
+/* --- Debug environment variables --- */
 console.log('[DEBUG] FRONTEND_URL:', process.env.FRONTEND_URL);
 console.log('[DEBUG] MONGO_URI:', process.env.MONGO_URI ? '✅ Present' : '❌ Missing');
 console.log('[DEBUG] SESSION_SECRET:', process.env.SESSION_SECRET ? '✅ Present' : '❌ Missing');
 
-// --- MongoDB connection ---
+/* --- MongoDB connection --- */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => {
@@ -31,46 +32,50 @@ mongoose.connect(process.env.MONGO_URI)
     process.exit(1);
   });
 
-// --- Body parser ---
+/* --- Middleware --- */
 app.use(express.json());
 
-// --- Enable CORS ---
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
 
-// --- Debug middleware for requests ---
+// Debug request logs
 app.use((req, res, next) => {
   console.log(`[DEBUG] ${req.method} ${req.url}`);
-  console.log('[DEBUG] Headers:', req.headers);
   if (['POST', 'PUT'].includes(req.method)) console.log('[DEBUG] Body:', req.body);
   next();
 });
 
-// --- Session setup ---
+/* --- Session setup with MongoDB (persistent sessions) --- */
 app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGO_URI,
+    collectionName: 'sessions',
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // secure cookies in prod
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 // 1 day
+  }
 }));
 
-// --- Initialize passport ---
+/* --- Passport init --- */
 app.use(passport.initialize());
 app.use(passport.session());
 
-// --- Routes ---
+/* --- Routes --- */
 app.get('/', (req, res) => {
   res.send('Welcome! <a href="/auth/twitter">Login with Twitter</a>');
 });
+
 app.use('/auth', authRoutes);
 
-// --- Protected dashboard page ---
+/* --- Protected dashboard page --- */
 app.get('/dashboard', (req, res) => {
-  console.log('[DEBUG] /dashboard req.isAuthenticated():', req.isAuthenticated());
-  console.log('[DEBUG] /dashboard req.user:', req.user);
-
   if (!req.isAuthenticated()) return res.redirect('/');
   const user = req.user;
   res.send(`
@@ -83,7 +88,7 @@ app.get('/dashboard', (req, res) => {
   `);
 });
 
-// --- API: Get current user ---
+/* --- API: Get current user --- */
 app.get('/api/me', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -102,7 +107,7 @@ app.get('/api/me', async (req, res) => {
   res.json({ _id, twitterId, username, displayName, photo, totalScore, weeklyScores, gamesLeft });
 });
 
-// --- API: Update score ---
+/* --- API: Update score --- */
 app.post('/api/update-score/:userId', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -130,7 +135,10 @@ app.post('/api/update-score/:userId', async (req, res) => {
 
   const weeklyTotal = user.weeklyScores.reduce((sum, s) => sum + s.score, 0);
   if (weeklyTotal + score > 210000) {
-    return res.status(400).json({ error: 'Weekly max points exceeded (210,000).', gamesLeft: 7 - user.weeklyScores.length });
+    return res.status(400).json({
+      error: 'Weekly max points exceeded (210,000).',
+      gamesLeft: 7 - user.weeklyScores.length
+    });
   }
 
   user.totalScore = (user.totalScore || 0) + score;
@@ -145,7 +153,7 @@ app.post('/api/update-score/:userId', async (req, res) => {
   });
 });
 
-// --- API: Leaderboard ---
+/* --- API: Leaderboard --- */
 app.get('/api/leaderboard', async (req, res) => {
   const all = req.query.all === 'true';
   const query = User.find().sort({ totalScore: -1 }).select('username displayName photo totalScore weeklyScores');
@@ -175,17 +183,17 @@ app.get('/api/leaderboard', async (req, res) => {
   res.json(result);
 });
 
-// --- Test DB route ---
+/* --- Test DB route --- */
 app.get('/test', async (req, res) => {
   const count = await User.countDocuments();
   res.json({ success: true, count });
 });
 
-// --- Catch-all error handler ---
+/* --- Catch-all error handler --- */
 app.use((err, req, res, next) => {
   console.error('[ERROR] Unhandled error:', err.stack);
   res.status(500).json({ error: 'Internal Server Error', message: err.message });
 });
 
-// --- Start server ---
+/* --- Start server --- */
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
