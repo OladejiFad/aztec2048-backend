@@ -48,6 +48,7 @@ app.use((req, res, next) => {
 });
 
 /* --- Session setup with MongoDB (persistent sessions) --- */
+/* --- Session setup with MongoDB (persistent sessions) --- */
 app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
   resave: false,
@@ -57,11 +58,13 @@ app.use(session({
     collectionName: 'sessions',
   }),
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // secure cookies in prod
-    httpOnly: true,
+    secure: true,          // Render uses HTTPS
+    httpOnly: true,        // prevent JS access
+    sameSite: "none",      // allow cross-domain cookies (Vercel <-> Render)
     maxAge: 1000 * 60 * 60 * 24 // 1 day
   }
 }));
+
 
 /* --- Passport init --- */
 app.use(passport.initialize());
