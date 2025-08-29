@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 /* --- Global unhandled rejection/exception logging --- */
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', (reason, promise) => {
   console.error('[UNHANDLED REJECTION]', reason);
 });
 process.on('uncaughtException', (err) => {
@@ -35,10 +35,10 @@ mongoose.connect(process.env.MONGO_URI)
 /* --- Middleware --- */
 app.use(express.json());
 
-/* --- CORS (allow frontend) --- */
+/* --- CORS setup --- */
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
+  credentials: true, // allow cookies to be sent
 }));
 
 // Debug request logs
@@ -48,7 +48,7 @@ app.use((req, res, next) => {
   next();
 });
 
-/* --- TRUST PROXY (fixes secure cookies on Render/Heroku/NGINX) --- */
+/* --- TRUST PROXY (important for Render/Heroku/NGINX secure cookies) --- */
 app.set("trust proxy", 1);
 
 /* --- Session setup with MongoDB (persistent sessions) --- */
@@ -56,15 +56,14 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
   resave: false,
   saveUninitialized: false,
-  proxy: true, // ✅ needed for "secure" cookies behind proxy
   store: MongoStore.create({
     mongoUrl: process.env.MONGO_URI,
     collectionName: 'sessions',
   }),
   cookie: {
-    secure: true,          // ✅ only works over HTTPS (Render forces HTTPS)
-    httpOnly: true,        // ✅ no JS access
-    sameSite: "none",      // ✅ allow cross-site cookies (Vercel <-> Render)
+    secure: process.env.NODE_ENV === "production", // true in prod (HTTPS), false locally
+    httpOnly: true,        // prevent JS access
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // cross-site cookies in prod
     maxAge: 1000 * 60 * 60 * 24 // 1 day
   }
 }));
