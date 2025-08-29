@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const passport = require('./config'); // your passport config
+const passport = require('./config'); // Passport config
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 const session = require('express-session');
@@ -16,8 +16,8 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS setup ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // must match deployed frontend exactly
-    credentials: true, // allow cookies to be sent
+    origin: process.env.FRONTEND_URL, // frontend must match exactly
+    credentials: true, // allow cookies
   })
 );
 
@@ -26,9 +26,10 @@ app.use(
   session({
     secret: process.env.SESSION_SECRET || 'default_session_secret',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false, // only create session if needed
     cookie: {
       secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // cross-site for Vercel frontend
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })

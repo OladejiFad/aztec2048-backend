@@ -22,18 +22,19 @@ function ensureAuthenticated(req, res, next) {
 }
 
 // --- Twitter login ---
-router.get('/twitter', passport.authenticate('twitter'));
+router.get(
+  '/twitter',
+  passport.authenticate('twitter', { session: true })
+);
 
 // --- Twitter callback ---
 router.get(
   '/twitter/callback',
-  passport.authenticate('twitter', { failureRedirect: '/' }),
+  passport.authenticate('twitter', { failureRedirect: process.env.FRONTEND_URL || '/' }),
   async (req, res) => {
     try {
-      // Twitter login stores user in req.user via Passport
       const user = req.user;
-
-      if (!user) return res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+      if (!user) return res.redirect(process.env.FRONTEND_URL || '/');
 
       // Create JWT token valid for 7 days
       const token = jwt.sign(
@@ -48,21 +49,20 @@ router.get(
       );
 
       // Redirect to frontend with token in URL hash
-      const redirectUrl = process.env.FRONTEND_URL
-        ? `${process.env.FRONTEND_URL}/dashboard#token=${token}`
-        : `http://localhost:3000/dashboard#token=${token}`;
-
+      const redirectUrl = `${process.env.FRONTEND_URL}/dashboard#token=${token}`;
       res.redirect(redirectUrl);
     } catch (err) {
       console.error('Error in Twitter callback:', err);
-      res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+      res.redirect(process.env.FRONTEND_URL || '/');
     }
   }
 );
 
 // --- Logout (frontend can just remove JWT token) ---
 router.get('/logout', (req, res) => {
-  res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+  req.logout(() => {
+    res.redirect(process.env.FRONTEND_URL || '/');
+  });
 });
 
 // --- API: Get current user ---
@@ -79,7 +79,7 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
     weekStart.setDate(now.getDate() - now.getDay());
 
     const weeklyScores = (user.weeklyScores || []).filter(
-      s => new Date(s.date) >= weekStart
+      (s) => new Date(s.date) >= weekStart
     );
 
     res.json({
@@ -115,7 +115,7 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
     weekStart.setDate(now.getDate() - now.getDay());
 
     if (!user.weeklyScores) user.weeklyScores = [];
-    user.weeklyScores = user.weeklyScores.filter(s => new Date(s.date) >= weekStart);
+    user.weeklyScores = user.weeklyScores.filter((s) => new Date(s.date) >= weekStart);
 
     if (user.weeklyScores.length >= 7) {
       return res.status(400).json({ error: 'Weekly play limit reached (7 games max).' });
@@ -151,9 +151,9 @@ router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
 
     const users = await User.find().sort({ totalScore: -1 }).limit(50);
 
-    const leaderboard = users.map(user => {
+    const leaderboard = users.map((user) => {
       const weeklyScores = (user.weeklyScores || []).filter(
-        s => new Date(s.date) >= weekStart
+        (s) => new Date(s.date) >= weekStart
       );
 
       const gamesThisWeek = weeklyScores.length;

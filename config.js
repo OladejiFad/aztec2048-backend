@@ -6,12 +6,10 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 
 // --- Connect to MongoDB ---
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => console.log('MongoDB connected from config.js'))
-  .catch(err => console.log('MongoDB connection error:', err));
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ MongoDB connected from config.js'))
+  .catch((err) => console.log('❌ MongoDB connection error:', err));
 
 // --- Passport Twitter strategy ---
 passport.use(
@@ -38,10 +36,10 @@ passport.use(
         const jwtToken = jwt.sign(
           { id: user._id, username: user.username },
           process.env.JWT_SECRET,
-          { expiresIn: '7d' } // token valid for 7 days
+          { expiresIn: '7d' }
         );
 
-        // Attach token to user object for later use
+        // Attach token to user object
         user.jwtToken = jwtToken;
 
         done(null, user);
