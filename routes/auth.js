@@ -1,12 +1,24 @@
 const express = require('express');
 const passport = require('passport');
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const router = express.Router();
 
-// Middleware to protect API routes
+// --- Middleware to protect API routes using JWT ---
 function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) return next();
-  res.status(401).json({ error: 'Not authenticated' });
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Not authenticated' });
+
+  const token = authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // attach user info to req.user
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
 }
 
 // --- Twitter login ---
@@ -16,23 +28,41 @@ router.get('/twitter', passport.authenticate('twitter'));
 router.get(
   '/twitter/callback',
   passport.authenticate('twitter', { failureRedirect: '/' }),
-  (req, res) => {
-    // Force redirect to frontend dashboard after successful login
-    const redirectUrl = process.env.FRONTEND_URL
-      ? `${process.env.FRONTEND_URL}/dashboard`
-      : 'http://localhost:3000/dashboard';
+  async (req, res) => {
+    try {
+      // Twitter login stores user in req.user via Passport
+      const user = req.user;
 
-    // Use cookie-based session persistence (already in your session setup)
-    res.redirect(redirectUrl);
+      if (!user) return res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+
+      // Create JWT token valid for 7 days
+      const token = jwt.sign(
+        {
+          _id: user._id,
+          username: user.username,
+          displayName: user.displayName,
+          photo: user.photo,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      // Redirect to frontend with token in URL hash
+      const redirectUrl = process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/dashboard#token=${token}`
+        : `http://localhost:3000/dashboard#token=${token}`;
+
+      res.redirect(redirectUrl);
+    } catch (err) {
+      console.error('Error in Twitter callback:', err);
+      res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+    }
   }
 );
 
-// --- Logout ---
-router.get('/logout', (req, res, next) => {
-  req.logout(err => {
-    if (err) return next(err);
-    res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
-  });
+// --- Logout (frontend can just remove JWT token) ---
+router.get('/logout', (req, res) => {
+  res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
 });
 
 // --- API: Get current user ---
@@ -58,7 +88,7 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
       photo: user.photo,
       totalScore: user.totalScore || 0,
       gamesThisWeek: weeklyScores.length,
-      gamesLeft: Math.max(0, 7 - weeklyScores.length)
+      gamesLeft: Math.max(0, 7 - weeklyScores.length),
     });
   } catch (err) {
     console.error('Error in /api/me:', err);
@@ -103,7 +133,7 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
       success: true,
       totalScore: user.totalScore,
       gamesThisWeek,
-      gamesLeft
+      gamesLeft,
     });
   } catch (err) {
     console.error('Error in /api/update-score:', err);
@@ -128,6 +158,7 @@ router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
 
       const gamesThisWeek = weeklyScores.length;
       const gamesLeft = Math.max(0, 7 - gamesThisWeek);
+
       return {
         _id: user._id,
         username: user.username,
@@ -135,7 +166,7 @@ router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
         photo: user.photo,
         totalScore: user.totalScore || 0,
         gamesThisWeek,
-        gamesLeft
+        gamesLeft,
       };
     });
 
