@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const passport = require('./config'); // your updated passport config
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
+const session = require('express-session'); // <- import session
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -20,8 +21,17 @@ app.use(
   })
 );
 
+// --- Session middleware (needed for OAuth login) ---
+app.use(session({
+  secret: process.env.JWT_SECRET || 'default_secret',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: process.env.NODE_ENV === 'production' } // HTTPS only in prod
+}));
+
 // --- Passport initialization ---
-app.use(passport.initialize()); // no session() needed for JWT
+app.use(passport.initialize());
+app.use(passport.session()); // <- enable session support for OAuth
 
 // --- Routes ---
 app.use('/auth', authRoutes);
@@ -33,9 +43,7 @@ app.get('/', (req, res) => {
 
 // --- Connect MongoDB ---
 mongoose
-  .connect(process.env.MONGO_URI, {
-    // useNewUrlParser and useUnifiedTopology are optional in v4+
-  })
+  .connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
