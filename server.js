@@ -47,7 +47,9 @@ app.use((req, res, next) => {
   next();
 });
 
-/* --- Session setup with MongoDB (persistent sessions) --- */
+/* --- TRUST PROXY (fixes secure cookies on Render/Heroku/NGINX) --- */
+app.set("trust proxy", 1);
+
 /* --- Session setup with MongoDB (persistent sessions) --- */
 app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
@@ -58,13 +60,12 @@ app.use(session({
     collectionName: 'sessions',
   }),
   cookie: {
-    secure: true,          // Render uses HTTPS
+    secure: true,          // required on Render (HTTPS)
     httpOnly: true,        // prevent JS access
-    sameSite: "none",      // allow cross-domain cookies (Vercel <-> Render)
+    sameSite: "none",      // allow cross-site cookies (Vercel <-> Render)
     maxAge: 1000 * 60 * 60 * 24 // 1 day
   }
 }));
-
 
 /* --- Passport init --- */
 app.use(passport.initialize());
