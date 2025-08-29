@@ -5,6 +5,7 @@ const passport = require('./config'); // Passport config
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -27,6 +28,10 @@ app.use(
     secret: process.env.SESSION_SECRET || 'default_session_secret',
     resave: false,
     saveUninitialized: false, // only create session if needed
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI,
+      collectionName: 'sessions',
+    }),
     cookie: {
       secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // cross-site for Vercel frontend
@@ -42,7 +47,7 @@ app.use(passport.session()); // enable session support for OAuth
 // --- Routes ---
 app.use('/auth', authRoutes);
 
-// --- Root test route ---
+// --- Root route ---
 app.get('/', (req, res) => {
   res.json({ message: 'Aztec2048 Backend is running!' });
 });
