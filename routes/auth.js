@@ -1,3 +1,4 @@
+// routes/auth.js
 const express = require('express');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
@@ -14,7 +15,7 @@ function ensureAuthenticated(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // attach user info to req.user
+    req.user = decoded; // attach decoded payload
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -22,10 +23,7 @@ function ensureAuthenticated(req, res, next) {
 }
 
 // --- Twitter login ---
-router.get(
-  '/twitter',
-  passport.authenticate('twitter', { session: true })
-);
+router.get('/twitter', passport.authenticate('twitter', { session: true }));
 
 // --- Twitter callback ---
 router.get(
@@ -49,8 +47,7 @@ router.get(
       );
 
       // Redirect to frontend with token in URL hash
-      const redirectUrl = `${process.env.FRONTEND_URL}/dashboard#token=${token}`;
-      res.redirect(redirectUrl);
+      res.redirect(`${process.env.FRONTEND_URL}/dashboard#token=${token}`);
     } catch (err) {
       console.error('Error in Twitter callback:', err);
       res.redirect(process.env.FRONTEND_URL || '/');
@@ -76,7 +73,7 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setDate(now.getDate() - now.getDay()); // start of current week (Sunday)
 
     const weeklyScores = (user.weeklyScores || []).filter(
       (s) => new Date(s.date) >= weekStart
@@ -109,13 +106,20 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    // Ensure that only the logged-in user can update their own score
+    if (user._id.toString() !== req.user._id) {
+      return res.status(403).json({ error: 'Unauthorized score update attempt.' });
+    }
+
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
     weekStart.setDate(now.getDate() - now.getDay());
 
-    if (!user.weeklyScores) user.weeklyScores = [];
-    user.weeklyScores = user.weeklyScores.filter((s) => new Date(s.date) >= weekStart);
+    // Keep only this week's scores
+    user.weeklyScores = (user.weeklyScores || []).filter(
+      (s) => new Date(s.date) >= weekStart
+    );
 
     if (user.weeklyScores.length >= 7) {
       return res.status(400).json({ error: 'Weekly play limit reached (7 games max).' });
@@ -126,14 +130,11 @@ router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) =
 
     await user.save();
 
-    const gamesThisWeek = user.weeklyScores.length;
-    const gamesLeft = Math.max(0, 7 - gamesThisWeek);
-
     res.json({
       success: true,
       totalScore: user.totalScore,
-      gamesThisWeek,
-      gamesLeft,
+      gamesThisWeek: user.weeklyScores.length,
+      gamesLeft: Math.max(0, 7 - user.weeklyScores.length),
     });
   } catch (err) {
     console.error('Error in /api/update-score:', err);
@@ -156,17 +157,14 @@ router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
         (s) => new Date(s.date) >= weekStart
       );
 
-      const gamesThisWeek = weeklyScores.length;
-      const gamesLeft = Math.max(0, 7 - gamesThisWeek);
-
       return {
         _id: user._id,
         username: user.username,
         displayName: user.displayName || user.username,
         photo: user.photo,
         totalScore: user.totalScore || 0,
-        gamesThisWeek,
-        gamesLeft,
+        gamesThisWeek: weeklyScores.length,
+        gamesLeft: Math.max(0, 7 - weeklyScores.length),
       };
     });
 
