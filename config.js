@@ -2,7 +2,6 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const passport = require('passport');
 const TwitterStrategy = require('passport-twitter').Strategy;
-const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 
 // --- Connect to MongoDB if not connected ---
@@ -34,15 +33,7 @@ passport.use(
           });
         }
 
-        // Generate JWT token
-        const jwtToken = jwt.sign(
-          { id: user._id, username: user.username },
-          process.env.JWT_SECRET,
-          { expiresIn: '7d' }
-        );
-
-        user.jwtToken = jwtToken;
-
+        // No JWT needed, session will store the user
         return done(null, user);
       } catch (err) {
         return done(err, null);
@@ -51,7 +42,7 @@ passport.use(
   )
 );
 
-// --- Serialize / Deserialize ---
+// --- Serialize / Deserialize for sessions ---
 passport.serializeUser((user, done) => done(null, user._id));
 passport.deserializeUser(async (id, done) => {
   try {
