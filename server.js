@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const passport = require('./config'); // Passport config
+const passport = require('./config'); // config.js
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 const session = require('express-session');
@@ -17,49 +17,49 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS setup ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // frontend must match exactly
+    origin: process.env.FRONTEND_URL, // must match frontend
     credentials: true, // allow cookies
   })
 );
 
-// --- Session middleware (required for Twitter OAuth) ---
+// --- Session (needed for Passport OAuth) ---
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'default_session_secret',
     resave: false,
-    saveUninitialized: false, // only create session if needed
+    saveUninitialized: false,
     store: MongoStore.create({
       mongoUrl: process.env.MONGO_URI,
       collectionName: 'sessions',
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // cross-site for Vercel frontend
+      secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })
 );
 
-// --- Passport initialization ---
+// --- Passport ---
 app.use(passport.initialize());
-app.use(passport.session()); // enable session support for OAuth
+app.use(passport.session());
 
 // --- Routes ---
 app.use('/auth', authRoutes);
 
-// --- Root route ---
+// --- Root ---
 app.get('/', (req, res) => {
-  res.json({ message: 'Aztec2048 Backend is running!' });
+  res.json({ message: '🚀 Aztec2048 Backend running on Render!' });
 });
 
-// --- Connect MongoDB ---
+// --- MongoDB connection ---
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
+  .then(() => console.log('✅ MongoDB connected from server.js'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // --- Start server ---
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`✅ Frontend URL: ${process.env.FRONTEND_URL}`);
+  console.log(`✅ FRONTEND_URL set to: ${process.env.FRONTEND_URL}`);
 });
