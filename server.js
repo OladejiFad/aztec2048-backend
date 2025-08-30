@@ -8,7 +8,9 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+
+// ✅ Always use Render’s PORT if provided
+const PORT = process.env.PORT || 5000;
 
 // --- Middleware ---
 app.use(express.json());
@@ -17,12 +19,12 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS setup ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // must match frontend
-    credentials: true, // allow cookies
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
   })
 );
 
-// --- Session (needed for Passport OAuth) ---
+// --- Session ---
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'default_session_secret',
@@ -33,9 +35,9 @@ app.use(
       collectionName: 'sessions',
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // only HTTPS in prod
+      secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 24 * 60 * 60 * 1000,
     },
   })
 );
