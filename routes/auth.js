@@ -45,6 +45,7 @@ router.get(
         { expiresIn: '7d' }
       );
 
+      // Redirect frontend with token in hash
       res.redirect(`${process.env.FRONTEND_URL}/dashboard#token=${token}`);
     } catch (err) {
       console.error('Error in Twitter callback:', err);

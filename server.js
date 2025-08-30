@@ -35,7 +35,7 @@ app.use(
       collectionName: 'sessions',
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // secure only in prod
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
@@ -49,7 +49,7 @@ app.use(passport.session());
 // --- Routes ---
 app.use('/auth', authRoutes);
 
-// --- Root ---
+// --- Root route ---
 app.get('/', (req, res) => {
   res.json({ message: '🚀 Aztec2048 Backend running on Render!' });
 });

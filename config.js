@@ -5,7 +5,7 @@ const TwitterStrategy = require('passport-twitter').Strategy;
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 
-// --- Connect to MongoDB if not already connected ---
+// --- Connect to MongoDB if not connected ---
 if (mongoose.connection.readyState === 0) {
   mongoose
     .connect(process.env.MONGO_URI)
