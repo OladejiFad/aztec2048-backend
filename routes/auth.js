@@ -24,16 +24,26 @@ function ensureAuthenticated(req, res, next) {
 // --- Twitter login ---
 router.get('/twitter', passport.authenticate('twitter', { session: true }));
 
-// --- Twitter callback ---
+// --- Twitter callback (updated with detailed logging) ---
 router.get(
   '/twitter/callback',
   passport.authenticate('twitter', { failureRedirect: process.env.FRONTEND_URL || '/' }),
   async (req, res) => {
     try {
-      const user = req.user;
-      if (!user) return res.redirect(process.env.FRONTEND_URL || '/');
+      if (!req.user) {
+        console.error('Twitter callback: No user returned from Passport');
+        return res.redirect(process.env.FRONTEND_URL || '/');
+      }
 
-      // JWT token for frontend
+      const user = req.user;
+      console.log('Twitter callback: user retrieved:', user);
+
+      // Check required fields
+      if (!process.env.JWT_SECRET) {
+        console.error('JWT_SECRET not set in .env!');
+        return res.status(500).send('Server misconfiguration: JWT_SECRET missing');
+      }
+
       const token = jwt.sign(
         {
           _id: user._id,
@@ -45,11 +55,12 @@ router.get(
         { expiresIn: '7d' }
       );
 
-      // Redirect frontend with token in hash
+      console.log('JWT token generated successfully:', token);
+
       res.redirect(`${process.env.FRONTEND_URL}/dashboard#token=${token}`);
     } catch (err) {
-      console.error('Error in Twitter callback:', err);
-      res.redirect(process.env.FRONTEND_URL || '/');
+      console.error('Twitter callback ERROR:', err);
+      res.status(500).send(`Internal Server Error: ${err.message}`);
     }
   }
 );
