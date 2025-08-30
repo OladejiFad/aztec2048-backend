@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const passport = require('./config'); // <-- make sure this is correct
+const passport = require('./config'); // Passport config
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 const session = require('express-session');
@@ -9,7 +9,7 @@ const MongoStore = require('connect-mongo');
 
 const app = express();
 
-// ✅ Always let Render set the port (defaults to 5000 locally)
+// ✅ Render always provides PORT
 const PORT = process.env.PORT || 5000;
 
 // --- Middleware ---

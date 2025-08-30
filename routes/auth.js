@@ -1,4 +1,3 @@
-// routes/auth.js
 const express = require('express');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
@@ -34,7 +33,7 @@ router.get(
       const user = req.user;
       if (!user) return res.redirect(process.env.FRONTEND_URL || '/');
 
-      // Create JWT token valid for 7 days
+      // JWT token for frontend
       const token = jwt.sign(
         {
           _id: user._id,
@@ -46,7 +45,6 @@ router.get(
         { expiresIn: '7d' }
       );
 
-      // Redirect to frontend with token in URL hash
       res.redirect(`${process.env.FRONTEND_URL}/dashboard#token=${token}`);
     } catch (err) {
       console.error('Error in Twitter callback:', err);
@@ -55,7 +53,7 @@ router.get(
   }
 );
 
-// --- Logout (frontend can just remove JWT token) ---
+// --- Logout ---
 router.get('/logout', (req, res) => {
   req.logout(() => {
     res.redirect(process.env.FRONTEND_URL || '/');
@@ -65,19 +63,15 @@ router.get('/logout', (req, res) => {
 // --- API: Get current user ---
 router.get('/api/me', ensureAuthenticated, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select(
-      'username displayName photo totalScore weeklyScores'
-    );
+    const user = await User.findById(req.user._id).select('username displayName photo totalScore weeklyScores');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay()); // start of current week (Sunday)
+    weekStart.setDate(now.getDate() - now.getDay());
 
-    const weeklyScores = (user.weeklyScores || []).filter(
-      (s) => new Date(s.date) >= weekStart
-    );
+    const weeklyScores = (user.weeklyScores || []).filter((s) => new Date(s.date) >= weekStart);
 
     res.json({
       username: user.username,
@@ -89,88 +83,6 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
     });
   } catch (err) {
     console.error('Error in /api/me:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// --- API: Update score ---
-router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) => {
-  const { userId } = req.params;
-  const { score } = req.body;
-
-  if (typeof score !== 'number' || score <= 0 || score > 30000) {
-    return res.status(400).json({ error: 'Invalid score. Max 30,000 per game.' });
-  }
-
-  try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    // Ensure that only the logged-in user can update their own score
-    if (user._id.toString() !== req.user._id) {
-      return res.status(403).json({ error: 'Unauthorized score update attempt.' });
-    }
-
-    const now = new Date();
-    const weekStart = new Date();
-    weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay());
-
-    // Keep only this week's scores
-    user.weeklyScores = (user.weeklyScores || []).filter(
-      (s) => new Date(s.date) >= weekStart
-    );
-
-    if (user.weeklyScores.length >= 7) {
-      return res.status(400).json({ error: 'Weekly play limit reached (7 games max).' });
-    }
-
-    user.totalScore = (user.totalScore || 0) + score;
-    user.weeklyScores.push({ score, date: now });
-
-    await user.save();
-
-    res.json({
-      success: true,
-      totalScore: user.totalScore,
-      gamesThisWeek: user.weeklyScores.length,
-      gamesLeft: Math.max(0, 7 - user.weeklyScores.length),
-    });
-  } catch (err) {
-    console.error('Error in /api/update-score:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// --- API: Leaderboard ---
-router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
-  try {
-    const now = new Date();
-    const weekStart = new Date();
-    weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay());
-
-    const users = await User.find().sort({ totalScore: -1 }).limit(50);
-
-    const leaderboard = users.map((user) => {
-      const weeklyScores = (user.weeklyScores || []).filter(
-        (s) => new Date(s.date) >= weekStart
-      );
-
-      return {
-        _id: user._id,
-        username: user.username,
-        displayName: user.displayName || user.username,
-        photo: user.photo,
-        totalScore: user.totalScore || 0,
-        gamesThisWeek: weeklyScores.length,
-        gamesLeft: Math.max(0, 7 - weeklyScores.length),
-      };
-    });
-
-    res.json({ leaderboard });
-  } catch (err) {
-    console.error('Error in /api/leaderboard:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

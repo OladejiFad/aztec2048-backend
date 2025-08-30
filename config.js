@@ -5,7 +5,7 @@ const TwitterStrategy = require('passport-twitter').Strategy;
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 
-// --- Connect to MongoDB (safety double connect if not connected) ---
+// --- Connect to MongoDB if not already connected ---
 if (mongoose.connection.readyState === 0) {
   mongoose
     .connect(process.env.MONGO_URI)
@@ -34,14 +34,14 @@ passport.use(
           });
         }
 
-        // --- Generate JWT token ---
+        // Generate JWT token
         const jwtToken = jwt.sign(
           { id: user._id, username: user.username },
           process.env.JWT_SECRET,
           { expiresIn: '7d' }
         );
 
-        user.jwtToken = jwtToken; // attach token for session
+        user.jwtToken = jwtToken;
 
         return done(null, user);
       } catch (err) {
