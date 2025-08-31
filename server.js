@@ -5,7 +5,6 @@ const passport = require('./config'); // Passport config (Twitter strategy)
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
 
 const app = express();
 
@@ -24,20 +23,15 @@ app.use(
   })
 );
 
-// --- Session (keep ONLY this one) ---
+// --- Session (simplified version you asked for) ---
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'default_session_secret',
+    secret: process.env.SESSION_SECRET || 'secret',
     resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URI,
-      collectionName: 'sessions',
-    }),
+    saveUninitialized: true,
     cookie: {
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })
 );
