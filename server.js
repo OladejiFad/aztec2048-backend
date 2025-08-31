@@ -24,7 +24,7 @@ app.use(
   })
 );
 
-// --- Session ---
+// --- Session (keep ONLY this one) ---
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'default_session_secret',
