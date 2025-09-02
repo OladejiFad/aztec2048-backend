@@ -3,7 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const passport = require('./configs'); // <-- Make sure filename is 'configs.js'
+const passport = require('./config'); // <-- Make sure filename is 'configs.js'
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 
