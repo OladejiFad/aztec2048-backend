@@ -3,6 +3,9 @@ const passport = require('passport');
 const TwitterStrategy = require('passport-twitter').Strategy;
 const User = require('./models/User');
 
+// ✅ Log the callback URL to verify it
+console.log('Twitter callback URL:', process.env.TWITTER_CALLBACK_URL);
+
 passport.use(
   new TwitterStrategy(
     {
