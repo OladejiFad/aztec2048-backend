@@ -14,19 +14,25 @@ router.get('/twitter', passport.authenticate('twitter', { session: true }));
 
 // --- Twitter callback ---
 router.get('/twitter/callback', (req, res, next) => {
-  passport.authenticate('twitter', (err, user) => {
+  passport.authenticate('twitter', (err, user, info) => {
+    console.log('Twitter callback debug:', { err, user, info });
+
     if (err) {
       console.error('Twitter callback error:', err);
       return res.status(500).send('Twitter callback failed');
     }
+
     if (!user) {
+      console.warn('No user returned from Twitter strategy');
       return res.redirect(process.env.FRONTEND_URL || '/');
     }
+
     req.logIn(user, (err) => {
       if (err) {
         console.error('Login error:', err);
         return res.status(500).send('Login failed');
       }
+      console.log('User logged in via Twitter:', user.username);
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
     });
   })(req, res, next);
@@ -75,18 +81,20 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
 router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) => {
   const { userId } = req.params;
   const { score } = req.body;
+
   try {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     user.totalScore = (user.totalScore || 0) + (score || 0);
-    user.weeklyScores.push({ score: score || 0 });
+    user.weeklyScores.push({ score: score || 0, date: new Date() });
     await user.save();
 
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
     weekStart.setDate(now.getDate() - now.getDay());
+
     const weeklyScores = (user.weeklyScores || []).filter(
       (s) => new Date(s.date) >= weekStart
     );
@@ -106,8 +114,8 @@ router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
   try {
     const users = await User.find({})
       .select('username displayName photo totalScore')
-      .sort({ totalScore: -1 }) // highest score first
-      .limit(100); // optional limit
+      .sort({ totalScore: -1 })
+      .limit(100);
 
     res.json({ leaderboard: users });
   } catch (err) {

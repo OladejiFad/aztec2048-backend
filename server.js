@@ -3,7 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const passport = require('./config'); // Passport Twitter strategy
+const passport = require('./configs'); // <-- Make sure filename is 'configs.js'
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 
@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // https://aztec2048.space
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   })
 );
@@ -56,7 +56,7 @@ app.get('/', (req, res) => {
 
 // --- MongoDB connection ---
 mongoose
-  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
