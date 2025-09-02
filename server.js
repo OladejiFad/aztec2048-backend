@@ -3,14 +3,14 @@ const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const passport = require('./config'); // passport config
+const passport = require('./config'); // passport configuration
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- Trust proxy for Railway deployment ---
+// --- Trust proxy for Railway / reverse proxies ---
 app.set('trust proxy', 1);
 
 // --- Middleware ---
@@ -20,12 +20,12 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
+    origin: process.env.FRONTEND_URL, // frontend URL
+    credentials: true,                // allow cookies to be sent cross-origin
   })
 );
 
-// --- Session ---
+// --- Session setup ---
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'secret-key',
@@ -37,10 +37,10 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // only HTTPS
+      secure: process.env.NODE_ENV === 'production', // must be true on HTTPS
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // allow cross-site OAuth
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })
 );
@@ -52,12 +52,12 @@ app.use(passport.session());
 // --- Routes ---
 app.use('/auth', authRoutes);
 
-// --- Root ---
+// --- Root route ---
 app.get('/', (req, res) => {
   res.json({ message: '🚀 Aztec2048 Backend running with Sessions!' });
 });
 
-// --- MongoDB ---
+// --- MongoDB connection ---
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
