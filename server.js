@@ -21,7 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: process.env.FRONTEND_URL,
-    credentials: true, // allow cookies across origins
+    credentials: true, // important for cookies
   })
 );
 
@@ -37,9 +37,9 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // must be true for HTTPS
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       httpOnly: true,
-      sameSite: 'none', // allow cross-site OAuth
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })
@@ -59,12 +59,26 @@ app.get('/', (req, res) => {
 
 // --- MongoDB connection ---
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // --- Start server ---
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server listening on port ${PORT}`);
   console.log(`✅ FRONTEND_URL: ${process.env.FRONTEND_URL}`);
 });
+
+// --- Graceful shutdown ---
+const shutdown = () => {
+  console.log('⚠️  Shutting down server...');
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log('✅ MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
