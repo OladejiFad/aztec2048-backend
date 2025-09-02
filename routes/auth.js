@@ -10,39 +10,27 @@ function ensureAuthenticated(req, res, next) {
 }
 
 // --- Twitter login ---
-router.get('/twitter', (req, res, next) => {
-  console.log('Initiating Twitter login...');
-  passport.authenticate('twitter', { session: true })(req, res, next);
-});
+router.get('/twitter', passport.authenticate('twitter', { session: true }));
 
 // --- Twitter callback ---
 router.get('/twitter/callback', (req, res, next) => {
-  console.log('Twitter callback hit');
-  passport.authenticate('twitter', (err, user, info) => {
-    console.log('Twitter callback debug:', { err, user, info });
-
+  passport.authenticate('twitter', (err, user) => {
     if (err) return res.status(500).send('Twitter callback failed');
     if (!user) return res.redirect(process.env.FRONTEND_URL || '/');
 
     req.logIn(user, (err) => {
       if (err) return res.status(500).send('Login failed');
 
-      // Send cookie immediately, then redirect
-      res.cookie('loggedIn', true, {
-        httpOnly: false,
-        secure: true,
-        sameSite: 'none',
-      });
-
+      // session cookie will be sent automatically
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
     });
   })(req, res, next);
 });
 
 // --- Logout ---
-router.get('/logout', (req, res, next) => {
+router.get('/logout', (req, res) => {
   req.logout((err) => {
-    if (err) return next(err);
+    if (err) return res.status(500).send('Logout failed');
     res.redirect(process.env.FRONTEND_URL || '/');
   });
 });
@@ -74,51 +62,6 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
     });
   } catch (err) {
     console.error('Error in /api/me:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// --- API: Update score ---
-router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) => {
-  const { userId } = req.params;
-  const { score } = req.body;
-  try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    user.totalScore = (user.totalScore || 0) + (score || 0);
-    user.weeklyScores.push({ score: score || 0 });
-    await user.save();
-
-    const now = new Date();
-    const weekStart = new Date();
-    weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay());
-    const weeklyScores = (user.weeklyScores || []).filter(
-      (s) => new Date(s.date) >= weekStart
-    );
-
-    res.json({
-      totalScore: user.totalScore,
-      gamesLeft: Math.max(0, 7 - weeklyScores.length),
-    });
-  } catch (err) {
-    console.error('Error in /api/update-score:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// --- API: Leaderboard ---
-router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
-  try {
-    const users = await User.find({})
-      .select('username displayName photo totalScore')
-      .sort({ totalScore: -1 })
-      .limit(100);
-
-    res.json({ leaderboard: users });
-  } catch (err) {
-    console.error('Error in /api/leaderboard:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
