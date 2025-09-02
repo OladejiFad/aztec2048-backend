@@ -37,13 +37,14 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // must be HTTPS in prod
+      secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // cross-site OAuth support
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
     },
   })
 );
+
 
 // --- Passport ---
 app.use(passport.initialize());
