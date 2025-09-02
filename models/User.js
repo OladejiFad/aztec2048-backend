@@ -5,8 +5,8 @@ const UserSchema = new mongoose.Schema({
   username: { type: String },
   displayName: { type: String },
   photo: { type: String },
-  totalScore: { type: Number, default: 0 }, // existing field
-  weeklyScores: [ // track weekly scores for anti-cheat
+  totalScore: { type: Number, default: 0 }, // total cumulative score
+  weeklyScores: [
     {
       score: Number,
       date: { type: Date, default: Date.now },
