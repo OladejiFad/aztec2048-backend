@@ -1,15 +1,13 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const passport = require('./config'); // Passport config (Twitter strategy)
-const authRoutes = require('./routes/auth');
-const cors = require('cors');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
+const passport = require('./config'); // Passport Twitter strategy
+const authRoutes = require('./routes/auth');
+const cors = require('cors');
 
 const app = express();
-
-// ✅ Render provides PORT automatically
 const PORT = process.env.PORT || 5000;
 
 // --- Middleware ---
@@ -19,23 +17,25 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true, // allow cookies
+    origin: process.env.FRONTEND_URL, // https://aztec2048.space
+    credentials: true,
   })
 );
 
 // --- Session ---
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'secret',
+    secret: process.env.SESSION_SECRET || 'secret-key',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     store: MongoStore.create({
       mongoUrl: process.env.MONGO_URI,
       collectionName: 'sessions',
+      crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // true only in production
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
@@ -51,7 +51,7 @@ app.use('/auth', authRoutes);
 
 // --- Root route ---
 app.get('/', (req, res) => {
-  res.json({ message: '🚀 Aztec2048 Backend running on Render with Sessions!' });
+  res.json({ message: '🚀 Aztec2048 Backend running with Sessions!' });
 });
 
 // --- MongoDB connection ---

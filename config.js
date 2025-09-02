@@ -1,18 +1,8 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
 const passport = require('passport');
 const TwitterStrategy = require('passport-twitter').Strategy;
 const User = require('./models/User');
 
-// --- Connect to MongoDB if not connected ---
-if (mongoose.connection.readyState === 0) {
-  mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ MongoDB connected from config.js'))
-    .catch((err) => console.error('❌ MongoDB connection error:', err));
-}
-
-// --- Passport Twitter strategy ---
 passport.use(
   new TwitterStrategy(
     {
@@ -23,7 +13,6 @@ passport.use(
     async (token, tokenSecret, profile, done) => {
       try {
         let user = await User.findOne({ twitterId: profile.id });
-
         if (!user) {
           user = await User.create({
             twitterId: profile.id,
@@ -32,8 +21,6 @@ passport.use(
             photo: profile.photos[0]?.value,
           });
         }
-
-        // No JWT needed, session will store the user
         return done(null, user);
       } catch (err) {
         return done(err, null);
@@ -42,7 +29,6 @@ passport.use(
   )
 );
 
-// --- Serialize / Deserialize for sessions ---
 passport.serializeUser((user, done) => done(null, user._id));
 passport.deserializeUser(async (id, done) => {
   try {

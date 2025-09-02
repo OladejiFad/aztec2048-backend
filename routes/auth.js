@@ -3,7 +3,7 @@ const passport = require('passport');
 const User = require('../models/User');
 const router = express.Router();
 
-// --- Middleware to protect API routes using session ---
+// --- Middleware to protect API routes ---
 function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) return next();
   return res.status(401).json({ error: 'Not authenticated' });
@@ -21,17 +21,15 @@ router.get(
       console.error('Twitter callback: No user returned from Passport');
       return res.redirect(process.env.FRONTEND_URL || '/');
     }
-
     console.log('Twitter callback: user retrieved:', req.user);
-
-    // Redirect to frontend dashboard (session is stored server-side)
     res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   }
 );
 
 // --- Logout ---
-router.get('/logout', (req, res) => {
-  req.logout(() => {
+router.get('/logout', (req, res, next) => {
+  req.logout((err) => {
+    if (err) return next(err);
     res.redirect(process.env.FRONTEND_URL || '/');
   });
 });
