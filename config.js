@@ -26,6 +26,7 @@ passport.use(
         }
         return done(null, user);
       } catch (err) {
+        console.error('Passport Twitter strategy error:', err);
         return done(err, null);
       }
     }
