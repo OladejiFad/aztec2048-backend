@@ -15,17 +15,14 @@ passport.use(
     async (token, tokenSecret, profile, done) => {
       try {
         let user = await User.findOne({ twitterId: profile.id });
-
         if (!user) {
           user = await User.create({
             twitterId: profile.id,
             username: profile.username,
             displayName: profile.displayName,
-            photo: profile.photos?.[0]?.value || null,
+            photo: profile.photos[0]?.value,
           });
-          console.log('New Twitter user created:', user.username);
         }
-
         return done(null, user);
       } catch (err) {
         console.error('Passport Twitter strategy error:', err);

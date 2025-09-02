@@ -10,10 +10,14 @@ function ensureAuthenticated(req, res, next) {
 }
 
 // --- Twitter login ---
-router.get('/twitter', passport.authenticate('twitter', { session: true }));
+router.get('/twitter', (req, res, next) => {
+  console.log('Initiating Twitter login...');
+  passport.authenticate('twitter', { session: true })(req, res, next);
+});
 
 // --- Twitter callback ---
 router.get('/twitter/callback', (req, res, next) => {
+  console.log('Twitter callback hit');
   passport.authenticate('twitter', (err, user, info) => {
     console.log('Twitter callback debug:', { err, user, info });
 
@@ -21,9 +25,8 @@ router.get('/twitter/callback', (req, res, next) => {
       console.error('Twitter callback error:', err);
       return res.status(500).send('Twitter callback failed');
     }
-
     if (!user) {
-      console.warn('No user returned from Twitter strategy');
+      console.warn('No user returned from Twitter OAuth');
       return res.redirect(process.env.FRONTEND_URL || '/');
     }
 
@@ -32,7 +35,7 @@ router.get('/twitter/callback', (req, res, next) => {
         console.error('Login error:', err);
         return res.status(500).send('Login failed');
       }
-      console.log('User logged in via Twitter:', user.username);
+      console.log(`User ${user.username} logged in successfully`);
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
     });
   })(req, res, next);
@@ -41,7 +44,10 @@ router.get('/twitter/callback', (req, res, next) => {
 // --- Logout ---
 router.get('/logout', (req, res, next) => {
   req.logout((err) => {
-    if (err) return next(err);
+    if (err) {
+      console.error('Logout error:', err);
+      return next(err);
+    }
     res.redirect(process.env.FRONTEND_URL || '/');
   });
 });
@@ -81,20 +87,18 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
 router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) => {
   const { userId } = req.params;
   const { score } = req.body;
-
   try {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     user.totalScore = (user.totalScore || 0) + (score || 0);
-    user.weeklyScores.push({ score: score || 0, date: new Date() });
+    user.weeklyScores.push({ score: score || 0 });
     await user.save();
 
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
     weekStart.setDate(now.getDate() - now.getDay());
-
     const weeklyScores = (user.weeklyScores || []).filter(
       (s) => new Date(s.date) >= weekStart
     );

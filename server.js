@@ -3,12 +3,15 @@ const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const passport = require('./config'); // <-- Make sure filename is 'configs.js'
+const passport = require('./config'); // passport config
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// --- Trust proxy for Railway deployment ---
+app.set('trust proxy', 1);
 
 // --- Middleware ---
 app.use(express.json());
@@ -34,7 +37,7 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production', // only HTTPS
       httpOnly: true,
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000,
@@ -49,12 +52,12 @@ app.use(passport.session());
 // --- Routes ---
 app.use('/auth', authRoutes);
 
-// --- Root route ---
+// --- Root ---
 app.get('/', (req, res) => {
   res.json({ message: '🚀 Aztec2048 Backend running with Sessions!' });
 });
 
-// --- MongoDB connection ---
+// --- MongoDB ---
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
