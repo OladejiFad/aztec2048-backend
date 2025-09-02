@@ -21,21 +21,19 @@ router.get('/twitter/callback', (req, res, next) => {
   passport.authenticate('twitter', (err, user, info) => {
     console.log('Twitter callback debug:', { err, user, info });
 
-    if (err) {
-      console.error('Twitter callback error:', err);
-      return res.status(500).send('Twitter callback failed');
-    }
-    if (!user) {
-      console.warn('No user returned from Twitter OAuth');
-      return res.redirect(process.env.FRONTEND_URL || '/');
-    }
+    if (err) return res.status(500).send('Twitter callback failed');
+    if (!user) return res.redirect(process.env.FRONTEND_URL || '/');
 
     req.logIn(user, (err) => {
-      if (err) {
-        console.error('Login error:', err);
-        return res.status(500).send('Login failed');
-      }
-      console.log(`User ${user.username} logged in successfully`);
+      if (err) return res.status(500).send('Login failed');
+
+      // Send cookie immediately, then redirect
+      res.cookie('loggedIn', true, {
+        httpOnly: false,
+        secure: true,
+        sameSite: 'none',
+      });
+
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
     });
   })(req, res, next);
@@ -44,10 +42,7 @@ router.get('/twitter/callback', (req, res, next) => {
 // --- Logout ---
 router.get('/logout', (req, res, next) => {
   req.logout((err) => {
-    if (err) {
-      console.error('Logout error:', err);
-      return next(err);
-    }
+    if (err) return next(err);
     res.redirect(process.env.FRONTEND_URL || '/');
   });
 });

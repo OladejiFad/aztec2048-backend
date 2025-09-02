@@ -21,7 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: process.env.FRONTEND_URL,
-    credentials: true, // important for cookies
+    credentials: true,
   })
 );
 
@@ -37,14 +37,13 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,          // must be true for HTTPS
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: 'none',      // cross-site cookies
       maxAge: 24 * 60 * 60 * 1000,
     },
   })
 );
-
 
 // --- Passport ---
 app.use(passport.initialize());
