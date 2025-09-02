@@ -20,8 +20,8 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // frontend URL
-    credentials: true,                // allow cookies to be sent cross-origin
+    origin: process.env.FRONTEND_URL,
+    credentials: true, // allow cookies across origins
   })
 );
 
@@ -37,9 +37,9 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production', // must be true on HTTPS
+      secure: process.env.NODE_ENV === 'production', // must be true for HTTPS
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // allow cross-site OAuth
+      sameSite: 'none', // allow cross-site OAuth
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })
