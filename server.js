@@ -18,9 +18,11 @@ const isProd = NODE_ENV === 'production';
 // --- Middleware ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ Allow frontend to call backend
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: process.env.FRONTEND_URL, // e.g. https://aztec2048.space
     credentials: true,
   })
 );
@@ -28,7 +30,7 @@ app.use(
 // --- Session ---
 const store = MongoStore.create({
   mongoUrl: process.env.MONGO_URI,
-  stringify: false, // store as BSON to prevent JSON parse errors
+  stringify: false,
 });
 
 app.use(
@@ -38,7 +40,7 @@ app.use(
     saveUninitialized: false,
     store,
     cookie: {
-      secure: isProd, // only true in production
+      secure: isProd,
       httpOnly: true,
       sameSite: isProd ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000,
@@ -58,38 +60,7 @@ app.use('/leaderboard', leaderboardRoutes);
 // --- MongoDB ---
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(async () => {
-    console.log('✅ MongoDB connected');
-
-    // --- Selective cleanup of corrupted sessions ---
-    try {
-      const db = mongoose.connection.db;
-      const sessions = db.collection('sessions');
-
-      const allSessions = await sessions.find({}).toArray();
-      let deleted = 0;
-
-      for (const sess of allSessions) {
-        try {
-          // Some drivers already store sessions as objects (no need to parse)
-          if (typeof sess.session === 'string') {
-            JSON.parse(sess.session);
-          }
-        } catch (err) {
-          await sessions.deleteOne({ _id: sess._id });
-          deleted++;
-        }
-      }
-
-      if (deleted > 0) {
-        console.log(`🧹 Cleaned up ${deleted} corrupted sessions`);
-      } else {
-        console.log('✅ No corrupted sessions found');
-      }
-    } catch (err) {
-      console.error('⚠️ Could not check/clean sessions:', err.message);
-    }
-  })
+  .then(() => console.log('✅ MongoDB connected'))
   .catch((err) => console.error(err));
 
 // --- Start server ---
