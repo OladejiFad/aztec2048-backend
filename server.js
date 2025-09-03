@@ -6,6 +6,7 @@ const MongoStore = require('connect-mongo');
 const passport = require('./config'); // passport configuration
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,7 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: process.env.FRONTEND_URL, // your frontend URL
     credentials: true,
   })
 );
@@ -37,9 +38,9 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: true,          // must be true for HTTPS
+      secure: true,       // true for HTTPS
       httpOnly: true,
-      sameSite: 'none',      // cross-site cookies
+      sameSite: 'none',   // cross-site cookies
       maxAge: 24 * 60 * 60 * 1000,
     },
   })
@@ -49,12 +50,18 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// --- Routes ---
+// --- API Routes ---
 app.use('/auth', authRoutes);
 
-// --- Root route ---
-app.get('/', (req, res) => {
-  res.json({ message: '🚀 Aztec2048 Backend running with Sessions!' });
+// --- Serve React frontend ---
+const frontendBuildPath = path.join(__dirname, '../frontend/build');
+app.use(express.static(frontendBuildPath));
+
+// --- Catch-all route for React Router ---
+app.use((req, res, next) => {
+  res.sendFile(path.join(frontendBuildPath, 'index.html'), (err) => {
+    if (err) next(err);
+  });
 });
 
 // --- MongoDB connection ---
