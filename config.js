@@ -1,33 +1,24 @@
-require('dotenv').config();
 const passport = require('passport');
-const TwitterStrategy = require('passport-twitter').Strategy;
-const User = require('./models/User');
+const LocalStrategy = require('passport-local').Strategy;
+const User = require('../models/User');
 
-console.log('Twitter callback URL:', process.env.TWITTER_CALLBACK_URL);
-
+// --- Local Strategy ---
 passport.use(
-  new TwitterStrategy(
-    {
-      consumerKey: process.env.TWITTER_CONSUMER_KEY,
-      consumerSecret: process.env.TWITTER_CONSUMER_SECRET,
-      callbackURL: process.env.TWITTER_CALLBACK_URL,
-      includeEmail: true,
-    },
-    async (token, tokenSecret, profile, done) => {
+  new LocalStrategy(
+    { usernameField: 'email' }, // login with email
+    async (email, password, done) => {
       try {
-        let user = await User.findOne({ twitterId: profile.id });
-        if (!user) {
-          user = await User.create({
-            twitterId: profile.id,
-            username: profile.username,
-            displayName: profile.displayName,
-            photo: profile.photos[0]?.value,
-          });
+        const user = await User.findOne({ email });
+        if (!user) return done(null, false, { message: 'Email not registered' });
+
+        // Simple password check (🔒 should hash with bcrypt later)
+        if (user.password !== password) {
+          return done(null, false, { message: 'Incorrect password' });
         }
+
         return done(null, user);
       } catch (err) {
-        console.error('Passport Twitter strategy error:', err);
-        return done(err, null);
+        return done(err);
       }
     }
   )

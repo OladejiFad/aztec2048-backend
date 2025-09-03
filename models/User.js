@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
-  twitterId: { type: String, required: true, unique: true },
-  username: { type: String },
+  username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true }, // will be hashed
   displayName: { type: String },
   photo: { type: String },
-  totalScore: { type: Number, default: 0 }, // total cumulative score
+  totalScore: { type: Number, default: 0 },
   weeklyScores: [
     {
       score: Number,
