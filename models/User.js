@@ -1,19 +1,18 @@
 const mongoose = require('mongoose');
 
-const UserSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }, // will be hashed
-  displayName: { type: String },
-  photo: { type: String },
-  totalScore: { type: Number, default: 0 },
-  weeklyScores: [
-    {
-      score: Number,
-      date: { type: Date, default: Date.now },
-    }
-  ],
-  createdAt: { type: Date, default: Date.now },
+const weeklyScoreSchema = new mongoose.Schema({
+  score: { type: Number, default: 0 },
+  date: { type: Date, default: Date.now },
 });
 
-module.exports = mongoose.model('User', UserSchema);
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  displayName: { type: String },
+  photo: { type: String, default: '' },
+  totalScore: { type: Number, default: 0 },
+  weeklyScores: [weeklyScoreSchema],
+}, { timestamps: true });
+
+module.exports = mongoose.model('User', userSchema);
