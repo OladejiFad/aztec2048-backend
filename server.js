@@ -33,11 +33,6 @@ const store = MongoStore.create({
   stringify: false,
 });
 
-app.get("/", (req, res) => {
-  res.send("✅ Backend is running on Railway!");
-});
-
-
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'secret-key',
@@ -61,6 +56,11 @@ app.use(passport.session());
 app.use('/auth', authRoutes);
 app.use('/game', gameRoutes);
 app.use('/leaderboard', leaderboardRoutes);
+
+// ✅ Root route (for Railway health check)
+app.get("/", (req, res) => {
+  res.send("✅ Backend is running on Railway!");
+});
 
 // --- MongoDB ---
 mongoose
