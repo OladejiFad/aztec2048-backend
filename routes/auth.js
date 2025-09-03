@@ -73,7 +73,7 @@ router.get('/logout', (req, res) => {
 });
 
 // --- Get current user ---
-router.get('/me', ensureAuthenticated, async (req, res) => {
+router.get('/api/me', ensureAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('displayName email totalScore weeklyScores');
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -83,9 +83,7 @@ router.get('/me', ensureAuthenticated, async (req, res) => {
     weekStart.setHours(0, 0, 0, 0);
     weekStart.setDate(now.getDate() - now.getDay());
 
-    const weeklyScores = (user.weeklyScores || []).filter(
-      (s) => new Date(s.date) >= weekStart
-    );
+    const weeklyScores = (user.weeklyScores || []).filter(s => new Date(s.date) >= weekStart);
 
     res.json({
       displayName: user.displayName,
@@ -99,5 +97,6 @@ router.get('/me', ensureAuthenticated, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
 
 module.exports = router;
