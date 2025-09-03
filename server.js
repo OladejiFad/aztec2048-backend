@@ -33,6 +33,11 @@ const store = MongoStore.create({
   stringify: false,
 });
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend is running on Railway!");
+});
+
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'secret-key',
