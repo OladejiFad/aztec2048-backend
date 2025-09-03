@@ -3,15 +3,14 @@ const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const passport = require('./config'); // passport configuration
+const passport = require('./config'); // passport setup
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- Trust proxy for Railway / reverse proxies ---
+// --- Trust proxy for Railway ---
 app.set('trust proxy', 1);
 
 // --- Middleware ---
@@ -21,7 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // your frontend URL
+    origin: process.env.FRONTEND_URL, // e.g., https://aztec2048.space
     credentials: true,
   })
 );
@@ -38,9 +37,9 @@ app.use(
       crypto: { secret: process.env.SESSION_SECRET },
     }),
     cookie: {
-      secure: true,       // true for HTTPS
+      secure: true,     // true for HTTPS
       httpOnly: true,
-      sameSite: 'none',   // cross-site cookies
+      sameSite: 'none', // allow cross-site cookies
       maxAge: 24 * 60 * 60 * 1000,
     },
   })
@@ -50,19 +49,8 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// --- API Routes ---
+// --- API routes ---
 app.use('/auth', authRoutes);
-
-// --- Serve React frontend ---
-const frontendBuildPath = path.join(__dirname, '../frontend/build');
-app.use(express.static(frontendBuildPath));
-
-// --- Catch-all route for React Router ---
-app.use((req, res, next) => {
-  res.sendFile(path.join(frontendBuildPath, 'index.html'), (err) => {
-    if (err) next(err);
-  });
-});
 
 // --- MongoDB connection ---
 mongoose
