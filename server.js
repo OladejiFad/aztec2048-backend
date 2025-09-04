@@ -8,8 +8,6 @@ const cors = require('cors');
 const path = require('path');
 
 const authRoutes = require('./routes/auth');
-const gameRoutes = require('./routes/game');
-const leaderboardRoutes = require('./routes/leaderboard');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,10 +18,9 @@ const isProd = NODE_ENV === 'production';
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Allow frontend to call backend
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // e.g. https://aztec2048.space
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   })
 );
@@ -55,22 +52,20 @@ app.use(passport.session());
 
 // --- Routes ---
 app.use('/auth', authRoutes);
-app.use('/game', gameRoutes);
-app.use('/leaderboard', leaderboardRoutes);
 
 // --- Serve frontend build ---
 const frontendBuildPath = path.join(__dirname, 'frontend', 'build');
 app.use(express.static(frontendBuildPath));
 
-// Fallback for SPA routing (React/Vue/Angular)
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(frontendBuildPath, 'index.html'));
 });
+
 // --- MongoDB ---
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => console.error(err));
+  .catch(err => console.error(err));
 
 // --- Start server ---
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

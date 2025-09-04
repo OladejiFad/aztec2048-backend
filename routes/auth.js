@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const router = express.Router();
 
-// Auth middleware
+// --- Auth middleware ---
 function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) return next();
   return res.status(401).json({ error: 'Not authenticated' });
@@ -36,7 +36,7 @@ router.post('/register', async (req, res) => {
       if (err) return res.status(500).json({ error: 'Auto login failed' });
       return res.status(201).json({
         message: 'User registered',
-        user: { displayName: newUser.displayName, email: newUser.email },
+        user: { displayName: newUser.displayName, email: newUser.email, _id: newUser._id },
       });
     });
   } catch (err) {
@@ -55,7 +55,12 @@ router.post('/login', (req, res, next) => {
       if (err) return res.status(500).json({ error: 'Login failed' });
       return res.json({
         message: 'Login successful',
-        user: { displayName: user.displayName, email: user.email },
+        user: {
+          displayName: user.displayName,
+          email: user.email,
+          totalScore: user.totalScore || 0,
+          _id: user._id,
+        },
       });
     });
   })(req, res, next);
@@ -72,10 +77,10 @@ router.get('/logout', (req, res) => {
   });
 });
 
-// --- Get current user ---
+// --- Get current user info ---
 router.get('/api/me', ensureAuthenticated, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('displayName email totalScore weeklyScores');
+    const user = await User.findById(req.user._id).select('displayName email totalScore weeklyScores photo');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const now = new Date();
@@ -88,8 +93,44 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
     res.json({
       displayName: user.displayName,
       email: user.email,
+      photo: user.photo,
       totalScore: user.totalScore || 0,
       gamesThisWeek: weeklyScores.length,
+      gamesLeft: Math.max(0, 7 - weeklyScores.length),
+      _id: user._id,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- Update score (from Game2048) ---
+router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) => {
+  try {
+    const { score } = req.body;
+    const { userId } = req.params;
+
+    if (!score || score <= 0) return res.status(400).json({ error: 'Invalid score' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Add to weeklyScores
+    user.weeklyScores.push({ score });
+    user.totalScore = (user.totalScore || 0) + score;
+    await user.save();
+
+    // Calculate games left
+    const now = new Date();
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(now.getDate() - now.getDay());
+
+    const weeklyScores = (user.weeklyScores || []).filter(s => new Date(s.date) >= weekStart);
+
+    res.json({
+      totalScore: user.totalScore,
       gamesLeft: Math.max(0, 7 - weeklyScores.length),
     });
   } catch (err) {
@@ -98,5 +139,18 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// --- Leaderboard (top 10 users) ---
+router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
+  try {
+    const topUsers = await User.find()
+      .sort({ totalScore: -1 })
+      .limit(10)
+      .select('username displayName totalScore photo');
+    res.json({ leaderboard: topUsers });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 module.exports = router;
