@@ -24,8 +24,8 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // exact frontend URL
-    credentials: true,                // allow cookies
+    origin: process.env.FRONTEND_URL, // e.g. "https://aztec2048.space"
+    credentials: true,                // allow cookies/sessions
   })
 );
 
@@ -43,9 +43,9 @@ app.use(
     saveUninitialized: false,
     store,
     cookie: {
-      secure: isProd,              // HTTPS only in production
-      httpOnly: true,              // prevents JS access
-      sameSite: isProd ? 'none' : 'lax', // cross-site cookies for production
+      secure: isProd,              // only send cookies over HTTPS
+      httpOnly: true,              // prevent JS access
+      sameSite: 'none',            // REQUIRED for cross-site cookies
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })
