@@ -23,7 +23,6 @@ function ensureAuthenticated(req, res, next) {
   }
 }
 
-
 // --- Register ---
 router.post('/register', async (req, res) => {
   try {
@@ -36,22 +35,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email already in use' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Generate unique avatar using DiceBear (bottts style)
     const avatarUrl = `https://avatars.dicebear.com/api/bottts/${encodeURIComponent(email)}.svg`;
 
     const newUser = await User.create({
       email,
       password: hashedPassword,
       displayName: displayName || '',
-      photo: avatarUrl, // store generated avatar
+      photo: avatarUrl,
     });
 
-    const token = jwt.sign(
-      { id: newUser._id, email: newUser.email },
-      JWT_SECRET,
-      { expiresIn: '1d' }
-    );
+    const token = jwt.sign({ id: newUser._id, email: newUser.email }, JWT_SECRET, { expiresIn: '1d' });
 
     res.status(201).json({
       message: 'User registered',
@@ -68,7 +61,6 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
-
 
 // --- Login ---
 router.post('/login', async (req, res) => {
@@ -123,13 +115,47 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// --- Update score ---
+router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { score } = req.body;
+
+    // Prevent updating someone else's score
+    if (String(req.user.id) !== id) return res.status(403).json({ error: 'Forbidden' });
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Update totalScore and weeklyScores
+    user.totalScore = (user.totalScore || 0) + score;
+    user.weeklyScores = user.weeklyScores || [];
+    user.weeklyScores.push({ score, date: new Date() });
+
+    await user.save();
+
+    // Calculate gamesLeft
+    const now = new Date();
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(now.getDate() - now.getDay());
+    const weeklyScores = (user.weeklyScores || []).filter(s => new Date(s.date) >= weekStart);
+    const gamesLeft = Math.max(0, 7 - weeklyScores.length);
+
+    res.json({ totalScore: user.totalScore, gamesLeft });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // --- Leaderboard ---
 router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
   try {
     const users = await User.find()
       .select('displayName photo totalScore')
-      .sort({ totalScore: -1 }) // highest score first
-      .limit(50); // optional: top 50 players
+      .sort({ totalScore: -1 })
+      .limit(50);
 
     res.json(users);
   } catch (err) {
@@ -137,6 +163,5 @@ router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
-
 
 module.exports = router;
