@@ -14,6 +14,9 @@ const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isProd = NODE_ENV === 'production';
 
+// --- Trust proxy for correct HTTPS detection behind Railway / Heroku ---
+if (isProd) app.set('trust proxy', 1);
+
 // --- Middleware ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -21,7 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 // --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // frontend must match exactly
+    origin: process.env.FRONTEND_URL, // exact frontend URL
     credentials: true,                // allow cookies
   })
 );
@@ -40,8 +43,8 @@ app.use(
     saveUninitialized: false,
     store,
     cookie: {
-      secure: isProd,       // HTTPS only in production
-      httpOnly: true,       // prevents JS access
+      secure: isProd,              // HTTPS only in production
+      httpOnly: true,              // prevents JS access
       sameSite: isProd ? 'none' : 'lax', // cross-site cookies for production
       maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
@@ -55,7 +58,7 @@ app.use(passport.session());
 // --- Routes ---
 app.use('/auth', authRoutes);
 
-// --- Serve frontend build (production) ---
+// --- Serve frontend build in production ---
 if (isProd) {
   const frontendBuildPath = path.join(__dirname, 'frontend', 'build');
   app.use(express.static(frontendBuildPath));
