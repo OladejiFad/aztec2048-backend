@@ -18,30 +18,32 @@ const isProd = NODE_ENV === 'production';
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// --- CORS ---
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
+    origin: process.env.FRONTEND_URL, // frontend must match exactly
+    credentials: true,                // allow cookies
   })
 );
 
-// --- Session ---
+// --- Session store ---
 const store = MongoStore.create({
   mongoUrl: process.env.MONGO_URI,
   stringify: false,
 });
 
+// --- Sessions ---
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'secret-key',
+    secret: process.env.SESSION_SECRET || 'fallback-secret',
     resave: false,
     saveUninitialized: false,
     store,
     cookie: {
-      secure: isProd,
-      httpOnly: true,
-      sameSite: isProd ? 'none' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
+      secure: isProd,       // HTTPS only in production
+      httpOnly: true,       // prevents JS access
+      sameSite: isProd ? 'none' : 'lax', // cross-site cookies for production
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
     },
   })
 );
@@ -53,19 +55,21 @@ app.use(passport.session());
 // --- Routes ---
 app.use('/auth', authRoutes);
 
-// --- Serve frontend build ---
-const frontendBuildPath = path.join(__dirname, 'frontend', 'build');
-app.use(express.static(frontendBuildPath));
+// --- Serve frontend build (production) ---
+if (isProd) {
+  const frontendBuildPath = path.join(__dirname, 'frontend', 'build');
+  app.use(express.static(frontendBuildPath));
 
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(frontendBuildPath, 'index.html'));
-});
+  app.get(/.*/, (req, res) => {
+    res.sendFile(path.join(frontendBuildPath, 'index.html'));
+  });
+}
 
 // --- MongoDB ---
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error(err));
+  .catch(err => console.error('[ERROR] MongoDB connection failed:', err));
 
 // --- Start server ---
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
