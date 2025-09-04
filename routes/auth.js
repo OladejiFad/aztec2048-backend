@@ -1,43 +1,67 @@
 const express = require('express');
-const passport = require('passport');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const router = express.Router();
 
-// --- Auth middleware ---
+const JWT_SECRET = process.env.JWT_SECRET || 'SuperSecretJWTKey123!';
+
+// --- Middleware to protect routes ---
 function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) return next();
-  return res.status(401).json({ error: 'Not authenticated' });
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+  const token = authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
 }
+
 
 // --- Register ---
 router.post('/register', async (req, res) => {
   try {
     const { email, password, displayName } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
+    if (!email || !password)
+      return res.status(400).json({ error: 'Email and password required' });
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    if (existingUser)
       return res.status(400).json({ error: 'Email already in use' });
-    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Generate unique avatar using DiceBear (bottts style)
+    const avatarUrl = `https://avatars.dicebear.com/api/bottts/${encodeURIComponent(email)}.svg`;
 
     const newUser = await User.create({
       email,
       password: hashedPassword,
       displayName: displayName || '',
+      photo: avatarUrl, // store generated avatar
     });
 
-    req.logIn(newUser, (err) => {
-      if (err) return res.status(500).json({ error: 'Auto login failed' });
-      return res.status(201).json({
-        message: 'User registered',
-        user: { displayName: newUser.displayName, email: newUser.email, _id: newUser._id },
-      });
+    const token = jwt.sign(
+      { id: newUser._id, email: newUser.email },
+      JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.status(201).json({
+      message: 'User registered',
+      user: {
+        _id: newUser._id,
+        displayName: newUser.displayName,
+        email: newUser.email,
+        photo: newUser.photo
+      },
+      token,
     });
   } catch (err) {
     console.error(err);
@@ -45,42 +69,36 @@ router.post('/register', async (req, res) => {
   }
 });
 
+
 // --- Login ---
-router.post('/login', (req, res, next) => {
-  passport.authenticate('local', (err, user, info) => {
-    if (err) return res.status(500).json({ error: 'Server error' });
-    if (!user) return res.status(400).json({ error: info?.message || 'Invalid credentials' });
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-    req.logIn(user, (err) => {
-      if (err) return res.status(500).json({ error: 'Login failed' });
-      return res.json({
-        message: 'Login successful',
-        user: {
-          displayName: user.displayName,
-          email: user.email,
-          totalScore: user.totalScore || 0,
-          _id: user._id,
-        },
-      });
-    });
-  })(req, res, next);
-});
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 
-// --- Logout ---
-router.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) return res.status(500).json({ error: 'Logout failed' });
-    req.session.destroy(() => {
-      res.clearCookie('connect.sid', { path: '/' });
-      return res.json({ message: 'Logged out' });
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(400).json({ error: 'Invalid credentials' });
+
+    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: '1d' });
+
+    res.json({
+      message: 'Login successful',
+      user: { _id: user._id, displayName: user.displayName, email: user.email, totalScore: user.totalScore || 0 },
+      token,
     });
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // --- Get current user info ---
 router.get('/api/me', ensureAuthenticated, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('displayName email totalScore weeklyScores photo');
+    const user = await User.findById(req.user.id).select('displayName email totalScore weeklyScores photo');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const now = new Date();
@@ -105,52 +123,20 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// --- Update score (from Game2048) ---
-router.post('/api/update-score/:userId', ensureAuthenticated, async (req, res) => {
+// --- Leaderboard ---
+router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
   try {
-    const { score } = req.body;
-    const { userId } = req.params;
+    const users = await User.find()
+      .select('displayName photo totalScore')
+      .sort({ totalScore: -1 }) // highest score first
+      .limit(50); // optional: top 50 players
 
-    if (!score || score <= 0) return res.status(400).json({ error: 'Invalid score' });
-
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    // Add to weeklyScores
-    user.weeklyScores.push({ score });
-    user.totalScore = (user.totalScore || 0) + score;
-    await user.save();
-
-    // Calculate games left
-    const now = new Date();
-    const weekStart = new Date();
-    weekStart.setHours(0, 0, 0, 0);
-    weekStart.setDate(now.getDate() - now.getDay());
-
-    const weeklyScores = (user.weeklyScores || []).filter(s => new Date(s.date) >= weekStart);
-
-    res.json({
-      totalScore: user.totalScore,
-      gamesLeft: Math.max(0, 7 - weeklyScores.length),
-    });
+    res.json(users);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// --- Leaderboard (top 10 users) ---
-router.get('/api/leaderboard', ensureAuthenticated, async (req, res) => {
-  try {
-    const topUsers = await User.find()
-      .sort({ totalScore: -1 })
-      .limit(10)
-      .select('username displayName totalScore photo');
-    res.json({ leaderboard: topUsers });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
 
 module.exports = router;
