@@ -5,6 +5,7 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const passport = require('./config/passport');
 const cors = require('cors');
+const path = require('path');
 
 const authRoutes = require('./routes/auth');
 const gameRoutes = require('./routes/game');
@@ -57,11 +58,14 @@ app.use('/auth', authRoutes);
 app.use('/game', gameRoutes);
 app.use('/leaderboard', leaderboardRoutes);
 
-// ✅ Root route (for Railway health check)
-app.get("/", (req, res) => {
-  res.send("✅ Backend is running on Railway!");
-});
+// --- Serve frontend build ---
+const frontendBuildPath = path.join(__dirname, 'frontend', 'build');
+app.use(express.static(frontendBuildPath));
 
+// Fallback for SPA routing (React/Vue/Angular)
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(frontendBuildPath, 'index.html'));
+});
 // --- MongoDB ---
 mongoose
   .connect(process.env.MONGO_URI)
