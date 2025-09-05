@@ -42,6 +42,8 @@ router.post('/register', async (req, res) => {
       password: hashedPassword,
       displayName: displayName || '',
       photo: avatarUrl,
+      totalScore: 0,
+      weeklyScores: [],
     });
 
     const token = jwt.sign({ id: newUser._id, email: newUser.email }, JWT_SECRET, { expiresIn: '1d' });
@@ -52,7 +54,8 @@ router.post('/register', async (req, res) => {
         _id: newUser._id,
         displayName: newUser.displayName,
         email: newUser.email,
-        photo: newUser.photo
+        photo: newUser.photo,
+        totalScore: newUser.totalScore,
       },
       token,
     });
@@ -78,7 +81,13 @@ router.post('/login', async (req, res) => {
 
     res.json({
       message: 'Login successful',
-      user: { _id: user._id, displayName: user.displayName, email: user.email, totalScore: user.totalScore || 0 },
+      user: {
+        _id: user._id,
+        displayName: user.displayName,
+        email: user.email,
+        totalScore: user.totalScore || 0,
+        photo: user.photo,
+      },
       token,
     });
   } catch (err) {
@@ -101,13 +110,13 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
     const weeklyScores = (user.weeklyScores || []).filter(s => new Date(s.date) >= weekStart);
 
     res.json({
+      _id: user._id,
       displayName: user.displayName,
       email: user.email,
       photo: user.photo,
       totalScore: user.totalScore || 0,
       gamesThisWeek: weeklyScores.length,
       gamesLeft: Math.max(0, 7 - weeklyScores.length),
-      _id: user._id,
     });
   } catch (err) {
     console.error(err);
@@ -121,28 +130,23 @@ router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
     const { id } = req.params;
     const { score } = req.body;
 
-    // Prevent updating someone else's score
     if (String(req.user.id) !== id) return res.status(403).json({ error: 'Forbidden' });
 
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Update totalScore and weeklyScores
     user.totalScore = (user.totalScore || 0) + score;
     user.weeklyScores = user.weeklyScores || [];
     user.weeklyScores.push({ score, date: new Date() });
-
     await user.save();
 
-    // Calculate gamesLeft
     const now = new Date();
     const weekStart = new Date();
     weekStart.setHours(0, 0, 0, 0);
     weekStart.setDate(now.getDate() - now.getDay());
     const weeklyScores = (user.weeklyScores || []).filter(s => new Date(s.date) >= weekStart);
-    const gamesLeft = Math.max(0, 7 - weeklyScores.length);
 
-    res.json({ totalScore: user.totalScore, gamesLeft });
+    res.json({ totalScore: user.totalScore, gamesLeft: Math.max(0, 7 - weeklyScores.length) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
