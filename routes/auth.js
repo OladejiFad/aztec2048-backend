@@ -4,43 +4,35 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'SuperSecretJWTKey123!';
+const JWT_SECRET = process.env.JWT_SECRET || 'SuperSecretJWTKey123!';
 
-// Middleware to protect routes
+// --- Middleware to protect routes ---
 function ensureAuthenticated(req, res, next) {
   const authHeader = req.headers['authorization'];
-  console.log('Auth header:', authHeader);
   if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
 
   const token = authHeader.split(' ')[1];
-  console.log('Token:', token);
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    console.log('Token valid, user:', req.user);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
   } catch (err) {
-    console.log('JWT verification failed:', err.message);
     return res.status(403).json({ error: 'Invalid token' });
   }
 }
 
-router.get('/api/me', ensureAuthenticated, async (req, res) => {
-  console.log('Fetching user for ID:', req.user.id);
-  const user = await User.findById(req.user.id);
-  console.log('User fetched:', user);
-  res.json(user);
-});
-
-// Register
+// --- Register ---
 router.post('/register', async (req, res) => {
   try {
     const { email, password, displayName } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (!email || !password)
+      return res.status(400).json({ error: 'Email and password required' });
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ error: 'Email already in use' });
+    if (existingUser)
+      return res.status(400).json({ error: 'Email already in use' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const avatarUrl = `https://avatars.dicebear.com/api/bottts/${encodeURIComponent(email)}.svg`;
@@ -58,7 +50,13 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({
       message: 'User registered',
-      user: { _id: newUser._id, displayName: newUser.displayName, email: newUser.email, photo: newUser.photo, totalScore: newUser.totalScore },
+      user: {
+        _id: newUser._id,
+        displayName: newUser.displayName,
+        email: newUser.email,
+        photo: newUser.photo,
+        totalScore: newUser.totalScore,
+      },
       token,
     });
   } catch (err) {
@@ -67,7 +65,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login
+// --- Login ---
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -83,7 +81,13 @@ router.post('/login', async (req, res) => {
 
     res.json({
       message: 'Login successful',
-      user: { _id: user._id, displayName: user.displayName, email: user.email, totalScore: user.totalScore || 0, photo: user.photo },
+      user: {
+        _id: user._id,
+        displayName: user.displayName,
+        email: user.email,
+        totalScore: user.totalScore || 0,
+        photo: user.photo,
+      },
       token,
     });
   } catch (err) {
@@ -92,7 +96,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Get current user info
+// --- Get current user info ---
 router.get('/api/me', ensureAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('displayName email totalScore weeklyScores photo');
@@ -120,11 +124,12 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Update score
+// --- Update score ---
 router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
     const { score } = req.body;
+
     if (String(req.user.id) !== id) return res.status(403).json({ error: 'Forbidden' });
 
     const user = await User.findById(id);
@@ -148,10 +153,14 @@ router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Leaderboard
-router.get('/leaderboard', async (req, res) => {
+// --- Leaderboard ---
+router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
   try {
-    const users = await User.find().select('displayName photo totalScore').sort({ totalScore: -1 }).limit(50);
+    const users = await User.find()
+      .select('displayName photo totalScore')
+      .sort({ totalScore: -1 })
+      .limit(50);
+
     res.json(users);
   } catch (err) {
     console.error(err);
