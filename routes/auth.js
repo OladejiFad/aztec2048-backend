@@ -4,25 +4,34 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const router = express.Router();
 
-// Use JWT_SECRET from environment, fallback to SESSION_SECRET, then a default
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'SuperSecretJWTKey123!';
 
 // Middleware to protect routes
 function ensureAuthenticated(req, res, next) {
   const authHeader = req.headers['authorization'];
+  console.log('Auth header:', authHeader);
   if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
 
   const token = authHeader.split(' ')[1];
+  console.log('Token:', token);
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.user = jwt.verify(token, JWT_SECRET);
+    console.log('Token valid, user:', req.user);
     next();
   } catch (err) {
+    console.log('JWT verification failed:', err.message);
     return res.status(403).json({ error: 'Invalid token' });
   }
 }
+
+router.get('/api/me', ensureAuthenticated, async (req, res) => {
+  console.log('Fetching user for ID:', req.user.id);
+  const user = await User.findById(req.user.id);
+  console.log('User fetched:', user);
+  res.json(user);
+});
 
 // Register
 router.post('/register', async (req, res) => {
@@ -116,7 +125,6 @@ router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
     const { score } = req.body;
-
     if (String(req.user.id) !== id) return res.status(403).json({ error: 'Forbidden' });
 
     const user = await User.findById(id);
@@ -140,7 +148,7 @@ router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Leaderboard (public)
+// Leaderboard
 router.get('/leaderboard', async (req, res) => {
   try {
     const users = await User.find().select('displayName photo totalScore').sort({ totalScore: -1 }).limit(50);
