@@ -153,8 +153,8 @@ router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// --- Leaderboard ---
-router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
+// Leaderboard (public)
+router.get('/leaderboard', async (req, res) => {
   try {
     const users = await User.find()
       .select('displayName photo totalScore')
@@ -167,5 +167,6 @@ router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
 
 module.exports = router;
