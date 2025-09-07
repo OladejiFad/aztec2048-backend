@@ -4,9 +4,10 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'SuperSecretJWTKey123!';
+// Use JWT_SECRET from environment, fallback to SESSION_SECRET, then a default
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'SuperSecretJWTKey123!';
 
-// --- Middleware to protect routes ---
+// Middleware to protect routes
 function ensureAuthenticated(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
@@ -23,16 +24,14 @@ function ensureAuthenticated(req, res, next) {
   }
 }
 
-// --- Register ---
+// Register
 router.post('/register', async (req, res) => {
   try {
     const { email, password, displayName } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ error: 'Email and password required' });
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
     const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ error: 'Email already in use' });
+    if (existingUser) return res.status(400).json({ error: 'Email already in use' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const avatarUrl = `https://avatars.dicebear.com/api/bottts/${encodeURIComponent(email)}.svg`;
@@ -50,13 +49,7 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({
       message: 'User registered',
-      user: {
-        _id: newUser._id,
-        displayName: newUser.displayName,
-        email: newUser.email,
-        photo: newUser.photo,
-        totalScore: newUser.totalScore,
-      },
+      user: { _id: newUser._id, displayName: newUser.displayName, email: newUser.email, photo: newUser.photo, totalScore: newUser.totalScore },
       token,
     });
   } catch (err) {
@@ -65,7 +58,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// --- Login ---
+// Login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -81,13 +74,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       message: 'Login successful',
-      user: {
-        _id: user._id,
-        displayName: user.displayName,
-        email: user.email,
-        totalScore: user.totalScore || 0,
-        photo: user.photo,
-      },
+      user: { _id: user._id, displayName: user.displayName, email: user.email, totalScore: user.totalScore || 0, photo: user.photo },
       token,
     });
   } catch (err) {
@@ -96,7 +83,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// --- Get current user info ---
+// Get current user info
 router.get('/api/me', ensureAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('displayName email totalScore weeklyScores photo');
@@ -124,7 +111,7 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// --- Update score ---
+// Update score
 router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
   try {
     const { id } = req.params;
@@ -156,17 +143,12 @@ router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
 // Leaderboard (public)
 router.get('/leaderboard', async (req, res) => {
   try {
-    const users = await User.find()
-      .select('displayName photo totalScore')
-      .sort({ totalScore: -1 })
-      .limit(50);
-
+    const users = await User.find().select('displayName photo totalScore').sort({ totalScore: -1 }).limit(50);
     res.json(users);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
-
 
 module.exports = router;
