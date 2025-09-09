@@ -35,7 +35,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email already in use' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const avatarUrl = `https://avatars.dicebear.com/api/bottts/${encodeURIComponent(email)}.svg`;
+    const avatarUrl = `https://avatars.dicebear.com/v2/bottts/${encodeURIComponent(email)}.svg`;
 
     const newUser = await User.create({
       email,
