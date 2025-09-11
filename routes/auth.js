@@ -111,6 +111,10 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
 
     const weeklyScores = (user.weeklyScores || []).filter(s => new Date(s.date) >= weekStart);
 
+    // 🔥 Count how many users have higher scores to determine position
+    const higherScores = await User.countDocuments({ totalScore: { $gt: user.totalScore } });
+    const position = higherScores + 1;
+
     res.json({
       _id: user._id,
       displayName: user.displayName,
@@ -119,12 +123,14 @@ router.get('/api/me', ensureAuthenticated, async (req, res) => {
       totalScore: user.totalScore || 0,
       gamesThisWeek: weeklyScores.length,
       gamesLeft: Math.max(0, 7 - weeklyScores.length),
+      position, // ✅ new field
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
+
 
 // --- Update score ---
 router.post('/api/update-score/:id', ensureAuthenticated, async (req, res) => {
