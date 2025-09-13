@@ -167,7 +167,7 @@ router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
     const users = await User.find()
       .select('displayName photo totalScore')
       .sort({ totalScore: -1 })
-      .limit(50);
+      .limit(100); // ✅ now top 100
 
     res.json(users);
   } catch (err) {
@@ -175,5 +175,6 @@ router.get('/leaderboard', ensureAuthenticated, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
 
 module.exports = router;
